@@ -1,0 +1,18 @@
+{
+  "dry_run": true,
+  "rows": [
+    {
+      "name": "UK Casino · Summer WO",
+      "page_key": "casino-summer-wo",
+      "url": "https://uk.landing.example.com/casino/?lp=summer-wo",
+      "market": "UK",
+      "product": "casino",
+      "brand": "example",
+      "locale": "en-GB",
+      "currency": "GBP",
+      "report_timezone": "Europe/London",
+      "page_family": "summer",
+      "acquisition_goal": "registration_completed"
+    }
+  ]
+}

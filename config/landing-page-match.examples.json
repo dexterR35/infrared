@@ -1,0 +1,10 @@
+{
+  "included": ["https://landing.example.com/casino/?lp=halloween"],
+  "not_included": [
+    "https://landing.example.com/",
+    "https://landing.example.com/casino/",
+    "https://landing.example.com/casino/?lp=christmas",
+    "https://landing.example.com/casino/?lp=halloween&lp=halloween",
+    "https://casino.landing.example.com/casino/?lp=halloween"
+  ]
+}
