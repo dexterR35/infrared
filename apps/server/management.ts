@@ -22,6 +22,9 @@ import {instrumentHTTP} from './telemetry.js';
 import {historyQuerySchema,historyTable,type TableQuery} from './table-data.js';
 import {registerGrowthManagement} from './growth-routes.js';
 import {createInstallationChecker,installationStatuses} from './installation-checks.js';
+import {intelligenceScopeSchema,intelligenceDatasetSchema,intelligencePredictSchema,eulerPredictSchema,jointPredictSchema,type IntelligenceScope,type IntelligenceDatasetQuery,type IntelligencePrediction,type EulerPrediction,type JointPrediction} from '../../packages/contracts/intelligence.js';
+import {exportSequences,modelStatus,predictActions,allowedTokens} from './intelligence.js';
+import {exportClickExamples,eulerStatus,predictClick} from './euler-intelligence.js';
 const obj=<P extends import('@sinclair/typebox').TProperties>(p:P)=>T.Object(p,{additionalProperties:false});
 const code=T.String({pattern:codePattern.source});
 const selectorSchema=obj({origin:T.String({maxLength:255}),path:T.String({maxLength:1024}),query_equals:T.Record(code,T.String({maxLength:64}),{maxProperties:8}),ignored_query_names:T.Array(code,{maxItems:16}),other_query_policy:T.Union([T.Literal('reject'),T.Literal('ignore')]),duplicate_query_policy:T.Literal('reject'),fragment_policy:T.Union([T.Literal('ignore_anchor'),T.Literal('reject')])});
@@ -93,6 +96,67 @@ export function createManagement(db:DB,rejections:Map<string,number>) {
  app.get<{Querystring:ReportFilter}>('/api/reports',{schema:{querystring:reportQuerySchema}},async(req)=>{
   const u=user(req);if(u.role==='installer')throw new Problem(403,'INSUFFICIENT_PERMISSION');
   await siteAccess(u,req.query.site_id);return report(db,req.query,{includePendingReferences:['owner','administrator'].includes(u.role)});
+ });
+ const intelligencePage=async(req:FastifyRequest,f:IntelligenceScope)=>{
+  const u=user(req);if(u.role==='installer')throw new Problem(403,'INSUFFICIENT_PERMISSION');
+  const site=await siteAccess(u,f.site_id);
+  const [page]=await db.query('SELECT * FROM pages WHERE site_id=$1 AND page_key=$2',[f.site_id,f.page_key]);
+  if(!page)throw new Problem(404,'PAGE_NOT_FOUND');
+  if(f.revision!==page.revision)throw new Problem(409,'INTELLIGENCE_REVISION_MISMATCH');
+  return {...page,environment:site.environment} as typeof page&{environment:string;elements:string[];actions:string[]};
+ };
+ app.get<{Querystring:IntelligenceDatasetQuery}>('/api/intelligence/dataset',{schema:{querystring:intelligenceDatasetSchema}},async(req,reply)=>{
+  const u=user(req);canEdit(u);const page=await intelligencePage(req,req.query);
+  limiter.check('intelligence-export:'+u.id,4,600000);
+  const dataset=await exportSequences(db,req.query,page);
+  await audit(db,u.id,'intelligence_dataset_exported',req.query.site_id,{page_key:req.query.page_key,data_source:req.query.data_source,sequences:dataset.sequences.length});
+  return reply.header('Content-Disposition','attachment; filename="infrared-sequences.json"').send(dataset);
+ });
+ app.get<{Querystring:IntelligenceScope}>('/api/intelligence/status',{schema:{querystring:intelligenceScopeSchema}},async req=>{
+  const page=await intelligencePage(req,req.query);return modelStatus(db,req.query,page);
+ });
+ app.post<{Body:IntelligencePrediction}>('/api/intelligence/predict',{schema:{body:intelligencePredictSchema}},async req=>{
+  const {history,top_k,...scope}=req.body,page=await intelligencePage(req,scope);
+  limiter.check('intelligence-predict:'+user(req).id,10,60000);
+  if(history.some(t=>!allowedTokens(page).has(t)))throw new Problem(422,'INTELLIGENCE_UNKNOWN_ACTION');
+  const status=await modelStatus(db,scope,page);
+  if(status.status!=='ready')throw new Problem(409,'INTELLIGENCE_MODEL_'+status.status.toUpperCase());
+  const result=await predictActions(scope,history,top_k,status.manifest);
+  const freshPage=await intelligencePage(req,scope),fresh=await modelStatus(db,scope,freshPage);
+  if(fresh.status!=='ready'||fresh.manifest.model_id!==status.manifest.model_id)throw new Problem(409,'INTELLIGENCE_MODEL_CHANGED');
+  return result;
+ });
+ app.get<{Querystring:IntelligenceDatasetQuery}>('/api/intelligence/euler/dataset',{schema:{querystring:intelligenceDatasetSchema}},async(req,reply)=>{
+  const u=user(req);canEdit(u);const page=await intelligencePage(req,req.query);limiter.check('intelligence-export:'+u.id,4,600000);
+  const dataset=await exportClickExamples(db,req.query,page);
+  await audit(db,u.id,'eulernet_dataset_exported',req.query.site_id,{page_key:req.query.page_key,data_source:req.query.data_source,views:dataset.views.length});
+  return reply.header('Content-Disposition','attachment; filename="infrared-click-examples.json"').send(dataset);
+ });
+ app.get<{Querystring:IntelligenceScope}>('/api/intelligence/euler/status',{schema:{querystring:intelligenceScopeSchema}},async req=>{
+  const page=await intelligencePage(req,req.query);return eulerStatus(db,req.query,page);
+ });
+ app.post<{Body:EulerPrediction}>('/api/intelligence/euler/predict',{schema:{body:eulerPredictSchema}},async req=>{
+  const {history,device,...scope}=req.body,page=await intelligencePage(req,scope);
+  limiter.check('intelligence-predict:'+user(req).id,10,60000);
+  if(history.some(t=>!allowedTokens(page).has(t)))throw new Problem(422,'INTELLIGENCE_UNKNOWN_ACTION');
+  const status=await eulerStatus(db,scope,page);if(status.status!=='ready')throw new Problem(409,'EULERNET_MODEL_'+status.status.toUpperCase());
+  const result=await predictClick(req.body,status.manifest);
+  const fresh=await eulerStatus(db,scope,await intelligencePage(req,scope));
+  if(fresh.status!=='ready'||fresh.manifest.model_id!==status.manifest.model_id)throw new Problem(409,'INTELLIGENCE_MODEL_CHANGED');
+  return result;
+ });
+ app.post<{Body:JointPrediction}>('/api/intelligence/analyze',{schema:{body:jointPredictSchema}},async req=>{
+  const {history,device,top_k,...scope}=req.body,page=await intelligencePage(req,scope);
+  limiter.check('intelligence-predict:'+user(req).id,10,60000);
+  if(history.some(t=>!allowedTokens(page).has(t)))throw new Problem(422,'INTELLIGENCE_UNKNOWN_ACTION');
+  const sasrec=await modelStatus(db,scope,page),euler=await eulerStatus(db,scope,page);
+  if(sasrec.status!=='ready')throw new Problem(409,'INTELLIGENCE_MODEL_'+sasrec.status.toUpperCase());
+  if(euler.status!=='ready')throw new Problem(409,'EULERNET_MODEL_'+euler.status.toUpperCase());
+  const eulernet=await predictClick({...scope,history,device},euler.manifest);
+  const next=await predictActions(scope,history,top_k,sasrec.manifest);
+  const freshPage=await intelligencePage(req,scope),freshSAS=await modelStatus(db,scope,freshPage),freshEuler=await eulerStatus(db,scope,freshPage);
+  if(freshSAS.status!=='ready'||freshEuler.status!=='ready'||freshSAS.manifest.model_id!==sasrec.manifest.model_id||freshEuler.manifest.model_id!==euler.manifest.model_id)throw new Problem(409,'INTELLIGENCE_MODEL_CHANGED');
+  return {sasrec:next,eulernet,combination:'separate_objectives'};
  });
  app.get<{Querystring:PortfolioFilter}>('/api/campaigns',{schema:{querystring:portfolioQuerySchema}},async req=>{const u=user(req);if(u.role==='installer')throw new Problem(403,'INSUFFICIENT_PERMISSION');const sites=await db.query(u.role==='owner'?'SELECT id FROM sites':'SELECT site_id AS id FROM site_memberships WHERE user_id=$1',u.role==='owner'?[]:[u.id]);return portfolio(db,req.query,sites.map(s=>s.id));});
  app.get<{Querystring:ReportFilter&{revision_a:string;revision_b:string}}>('/api/reports/versions',{schema:{querystring:obj({...reportQuerySchema.properties,revision_a:code,revision_b:code})}},async req=>{const u=user(req);if(u.role==='installer')throw new Problem(403,'INSUFFICIENT_PERMISSION');await siteAccess(u,req.query.site_id);const {revision_a,revision_b,...filters}=req.query;return {reports:await Promise.all([revision_a,revision_b].map(revision=>report(db,{...filters,revision,reference_id:undefined}))),definition:'Separate page revisions, independent cohorts and reference layouts; counts are observed, not causal experiment results.'};});

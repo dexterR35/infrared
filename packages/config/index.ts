@@ -3,6 +3,7 @@ import path from 'node:path';
 import {configuredOrigin,configuredPort,loopbackOrigin} from './origins.js';
 export const config={
  dataDir:path.resolve(process.env.DATA_DIR||'.local'),databaseUrl:process.env.DATABASE_URL||undefined,
+ intelligencePython:process.env.INFRARED_INTELLIGENCE_PYTHON||'python',
  backupDir:path.resolve(process.env.HEATMAP_BACKUP_DIR||path.join(process.env.DATA_DIR||'.local','backups')),
  dashboardPort:configuredPort(process.env.DASHBOARD_PORT,3000),collectorPort:configuredPort(process.env.COLLECTOR_PORT,8080),demoPort:configuredPort(process.env.DEMO_PORT,4173),
  dashboardOrigin:configuredOrigin(process.env.DASHBOARD_ORIGIN||'http://127.0.0.1:3000','DASHBOARD'),collectorOrigin:configuredOrigin(process.env.COLLECTOR_ORIGIN||'http://127.0.0.1:8080','COLLECTOR'),demoOrigin:loopbackOrigin(process.env.DEMO_ORIGIN||'http://127.0.0.1:4173','DEMO'),

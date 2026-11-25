@@ -2,6 +2,7 @@ import {unlink} from 'node:fs/promises';
 import path from 'node:path';
 import type {DB} from '../../packages/db/index.js';
 import {audit} from './security.js';
+import {pruneIntelligence} from './intelligence.js';
 export async function retention(db:DB,dataDir:string){
  const [settings]=await db.query("SELECT value FROM settings WHERE key='privacy'");const cutoff=new Date(Date.now()-settings.value.raw_days*86400000).toISOString(),refCutoff=new Date(Date.now()-settings.value.reference_days*86400000).toISOString();
  const refs=await db.query('SELECT id,object_key FROM page_references WHERE created_at<$1',[refCutoff]);
@@ -16,5 +17,7 @@ export async function retention(db:DB,dataDir:string){
   await tx.query('DELETE FROM page_references WHERE created_at<$1',[refCutoff]);await tx.query('DELETE FROM sessions WHERE expires_at<now()');await tx.query("DELETE FROM ingestion_quotas WHERE day<CURRENT_DATE-7");await audit(tx,null,'retention_completed',null,{deleted_views:views.length,deleted_references:refs.length});return views.length;
  });
  for(const ref of refs)if(/^[\da-f-]+\.png$/.test(ref.object_key))await unlink(path.join(dataDir,'references',ref.object_key)).catch(()=>{});
- return {deleted_views:deleted,deleted_references:refs.length,cutoff};
+ const versions=await db.query('SELECT id,intelligence_version FROM sites');
+ const deleted_models=await pruneIntelligence(dataDir,settings.value.raw_days,new Map(versions.map(s=>[s.id,s.intelligence_version])));
+ return {deleted_views:deleted,deleted_references:refs.length,deleted_models,cutoff};
 }

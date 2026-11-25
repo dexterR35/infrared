@@ -30,6 +30,7 @@
     "backup": "tsx scripts/backup.ts",
     "release:check": "tsx scripts/release-check.ts",
     "restore": "tsx scripts/restore.ts",
+    "intelligence:export": "tsx scripts/intelligence-export.ts",
     "start:api": "tsx apps/api/main.ts",
     "start:collector": "tsx apps/collector/main.ts",
     "start:worker": "tsx apps/worker/main.ts",

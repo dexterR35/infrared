@@ -2,9 +2,9 @@
 
 ![Local demo, consent-based analytics, Node.js 24+](docs/readme-badges.svg)
 
-Infrared is a private workspace for consent-based heatmaps and conversion analytics. Use it to see where visitors click, how far they scroll, which calls to action they use, and where interactions may need investigation. The local release includes two fictional campaign pages, a tracking SDK, a collector, a worker, and a dashboard.
+Infrared is a private workspace for consent-based heatmaps, conversion analytics, and optional local behavioural intelligence. Use it to see where visitors click, how far they scroll, which calls to action they use, and where interactions may need investigation. SASRec adds next-action rankings; EulerNet adds exposure-based click estimates. The local release includes two fictional campaign pages, a tracking SDK, a collector, a worker, and a dashboard.
 
-[Quick start](#quick-start) · [Dashboard navigation](#dashboard-navigation) · [Screenshot walkthrough](#screenshot-walkthrough) · [Development and operations](#development-and-operations)
+[Quick start](#quick-start) · [Journey intelligence](#journey-intelligence) · [Dashboard navigation](#dashboard-navigation) · [Screenshot walkthrough](#screenshot-walkthrough) · [Development and operations](#development-and-operations)
 
 ## Quick start
 
@@ -44,6 +44,56 @@ The administrator command requires the local server to be stopped. Leave the sta
 - **Generated samples** shows fixture traffic. To populate it, stop the native server, run `pnpm seed`, and restart. The command generates 210 views across Halloween and Christmas and skips a fixture that has already been seeded.
 - **Earlier data · unclassified** shows retained historical events whose source could not be separated reliably.
 
+## Journey intelligence
+
+Open **Analysis → [Journey intelligence](http://127.0.0.1:3000/#intelligence)** to train and inspect two complementary models. Both are optional; ordinary heatmaps, reports, funnels, and experiments run without Python or trained models.
+
+| Model | Question | Output |
+| --- | --- | --- |
+| **SASRec** | Given the preceding actions in this page view, what interaction is likely next? | Ranked registered interactions with raw ranking scores. These scores are not click probabilities. |
+| **EulerNet** | After an element's first qualified exposure, will it receive a pointer click within 30 seconds? | A model estimate for exposures with a complete observed 30-second window. Early departures and incomplete windows are excluded from this target. |
+
+Use either model independently or select **Analyze both models** to display both outputs from the same exposure history. The models retain separate objectives and scores. These are trainable PyTorch implementations running locally on CPU; no external inference API or AI subscription is required. RecBole is not a dependency of this integration.
+
+### Set up and train
+
+Use Python 3.12 or later with a supported PyTorch wheel. From the repository root on Windows:
+
+```powershell
+python -m venv .local/intelligence-venv
+.local/intelligence-venv/Scripts/python.exe -m pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cpu
+.local/intelligence-venv/Scripts/python.exe -m pip install -r apps/intelligence/requirements.txt
+```
+
+Set the interpreter in `.env`, then restart Infrared:
+
+```dotenv
+INFRARED_INTELLIGENCE_PYTHON=.local/intelligence-venv/Scripts/python.exe
+```
+
+On macOS/Linux, use `.local/intelligence-venv/bin/python`. The supplied Node-only Docker image requires additional Python/PyTorch setup to run these features.
+
+1. Sign in as an owner or administrator. In **Journey intelligence**, choose the page, data source, and inclusive UTC export dates.
+2. Use **Download training sequences** for SASRec and **Download click training examples** for EulerNet. Exports contain approved action/context fields and timestamps, without visitor, view, or session identifiers. Unclassified legacy activity cannot train models.
+3. Train the downloaded datasets using the commands below. Delete the exports after training.
+4. Choose **Refresh data** in the dashboard. Build an action history for SASRec. For EulerNet or joint analysis, end the history with the element's first `exposure:<element_id>` action and choose **Device at exposure**. Select **Predict next action**, **Estimate exposed-element click**, or **Analyze both models**.
+
+```powershell
+.local/intelligence-venv/Scripts/python.exe apps/intelligence/sasrec.py train --dataset C:/path/to/infrared-sequences.json
+.local/intelligence-venv/Scripts/python.exe apps/intelligence/eulernet.py train --dataset C:/path/to/infrared-click-examples.json
+```
+
+If the app uses a custom data directory, pass the same directory to each training command with `--data-dir`. The Python CLIs read the shell's `DATA_DIR`, not `.env`. For authenticated CLI export of both datasets, use `pnpm intelligence:export --model both` with the page, scope, and date arguments in the [full setup guide](docs/INTELLIGENCE.md).
+
+### Evaluation, privacy, and release scope
+
+- **Evaluation.** Training, validation, and test sets use chronological whole-page-view splits with overlapping views excluded across boundaries. SASRec is compared with popularity and last-action baselines. EulerNet is compared with logistic regression and an observed-rate baseline, with validation-fitted calibration and held-out click metrics.
+- **Data requirements.** SASRec needs at least 10 eligible sequences for a synthetic test; real sites also enforce reporting cohorts and action support. EulerNet needs complete exposure windows, sufficient observation continuity, and both click and no-click outcomes in each partition. Missing events, reported drops, interruptions, and incomplete windows are excluded. The standard short-duration demo samples may not supply eligible EulerNet windows.
+- **Privacy and scope.** Exports require authorized site access and are audited. Models stay separate by page configuration and data source, expire under raw retention, and become incompatible when linked evidence is withdrawn through the acquisition consent-deletion flow. Retention maintenance removes expired and revoked managed artifacts.
+- **Current validation.** The native integration passed 192 TypeScript tests, 11 Python tests, and four browser tests, including actual training and joint inference with synthetic fixtures. Generated samples validate the pipeline; they do not establish real-traffic accuracy. The dashboard distinguishes fixture-only results, models needing review, and models passing offline checks. Production accuracy and deployed inference remain unverified; compare representative recorded traffic with the simpler baselines before relying on estimates.
+
+See [Intelligence setup, data contracts, evaluation, APIs, and limitations](docs/INTELLIGENCE.md) for the complete workflow.
+
 ## Dashboard navigation
 
 The sidebar groups daily work under **Workspace**, deeper reporting under **Analysis**, and configuration under **Manage**. The links below open each screen on the default local dashboard.
@@ -61,6 +111,7 @@ The sidebar groups daily work under **Workspace**, deeper reporting under **Anal
 
 | Screen | Use it to |
 | --- | --- |
+| [Journey intelligence](http://127.0.0.1:3000/#intelligence) | Train optional local SASRec and EulerNet models, inspect next-action rankings and exposure-time click estimates together, and compare held-out results with simpler baselines. See [setup and limitations](docs/INTELLIGENCE.md). |
 | [Acquisition](http://127.0.0.1:3000/#acquisition) | Review backend-confirmed registrations and qualified acquisitions. Reconcile campaign spend and review cost per acquisition when outcome and spend coverage support it. |
 | [Experiments](http://127.0.0.1:3000/#experiments) | Plan A/A or A/B tests, review assigned and rendered variants, check validity, and read results when the test criteria are met. Use the local lab to try the flow with fictional outcomes. |
 | [Diagnostics](http://127.0.0.1:3000/#diagnostics) | Investigate repeated-click clusters, possible no-response clicks, generic error signals, and browser performance timings. |
@@ -175,5 +226,6 @@ The app publishes its ports on loopback, and PostgreSQL stays on the private Com
 - [Architecture](docs/ARCHITECTURE.md) · [Data dictionary](docs/DATA_DICTIONARY.md) · [Chart controls and definitions](docs/CHARTS.md)
 - [Marketing installation](docs/MARKETING_INSTALL.md) · [Installation checks](docs/INSTALLATION_CHECKS.md) · [Consent integration](docs/CONSENT_INTEGRATION.md)
 - [Acquisition and experiments](docs/ACQUISITION_EXPERIMENTS.md) · [Analytics definitions](docs/ANALYTICS_UPGRADE.md)
+- [SASRec and EulerNet intelligence](docs/INTELLIGENCE.md) — local setup, dataset exports, joint analysis, evaluation, and model lifecycle.
 - [Operations, retention, backup and recovery](docs/OPERATIONS.md) · [Threat model](docs/THREAT_MODEL.md) · [Security audit](docs/SECURITY_AUDIT.md)
 - [Implementation history](docs/IMPLEMENTATION_STATUS.md) · [Production readiness](docs/PRODUCTION_READINESS.md) · [Production stack](docs/PRODUCTION_STACK.md) · [Dependency inventory](docs/DEPENDENCIES.md) · [Original specification](docs/INITIAL_BUILD_SPEC.md)

@@ -32,4 +32,4 @@ Primary documentation consulted:
 - [Node release schedule](https://github.com/nodejs/Release) — Node 24 container baseline.
 - [Playwright browser installation](https://playwright.dev/docs/browsers) — pinned package/browser pairing for the fixture runner and browser acceptance tests.
 
-No external analytics service, AI runtime, heatmap engine, replay library or paid hostname is required. No runtime CDN/fonts are used.
+No external analytics service, heatmap engine, replay library or paid hostname is required. No runtime CDN/fonts are used. [Journey intelligence](INTELLIGENCE.md) optionally uses a separate Python environment with PyTorch 2.15.0 and NumPy 2.5.5 for the repository's SASRec and EulerNet implementations (see `apps/intelligence/requirements.txt`). Ordinary analytics does not require it. RecBole is not a dependency; no upstream EulerNet source is vendored.

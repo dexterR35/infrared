@@ -13,6 +13,7 @@ trackinglandingpages/
     capture-runner/  Isolated loopback-only Playwright process
     demo/            Independent synthetic landing-page server
     server/          Shared HTTP factories and native local orchestrator
+    intelligence/    Optional local PyTorch SASRec + EulerNet training/evaluation/inference
   packages/
     contracts/       Strict event JSON Schema and TypeScript types
     domain/          Exact-page matching, geometry and view/segment facts
@@ -70,6 +71,8 @@ Automatic capture is restricted to the two known local fixtures. Real-page draft
 Reports return grouped click cells, compatible scroll-reach segment counts, element engagement, denominators and coverage exclusions. The element table distinguishes repeated pointer clicks, distinct exposed views, distinct activated views, and the intersection used for exposed-view activation rate. Exports remain aggregate.
 
 ## Migration and retention
+
+The optional [intelligence integration](INTELLIGENCE.md) exports registered within-view sequences for SASRec and separate fully observed exposure-click examples for EulerNet through authenticated management routes. Python CLIs train and evaluate each model; the API invokes bounded local CPU inference without connecting Python to PGlite. Joint analysis returns separate next-action rankings and 30-second click estimates, with no mathematical score blending. Models have separate artifact directories, share page configuration/data-source/evidence scope, and expire under raw retention. Migration 012 adds a site evidence version rotated by acquisition withdrawal to invalidate both models and earlier exports. Managed models are pruned by retention; logical backups exclude model files and Python environments.
 
 Migration 002 adds capture jobs and schedules older derived facts for recomputation. Site keys, page identities, event IDs, approvals, users and existing references are preserved. Fact aggregation v2 is built from existing retained events.
 

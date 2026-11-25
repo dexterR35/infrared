@@ -1,6 +1,7 @@
 import {historyQuerySchema} from '../apps/server/table-data.js';
 import {writeFile} from 'node:fs/promises';
 import {batchSchema} from '../packages/contracts/events.js';
+import {intelligenceScopeSchema,intelligenceDatasetSchema,intelligencePredictSchema,eulerPredictSchema,jointPredictSchema} from '../packages/contracts/intelligence.js';
 import {reportQuerySchema,installQuerySchema,portfolioQuerySchema,pagePolicySchema,operationSettingsSchema} from '../packages/security/validation.js';
 import {acquisitionVisitSchema,acquisitionRenderSchema,acquisitionOutcomeSchema,acquisitionWithdrawSchema,registryImportSchema,experimentSchema,experimentStateSchema,spendSchema,acquisitionQuerySchema} from '../packages/contracts/acquisition.js';
 const paths:Record<string,unknown>={};
@@ -17,6 +18,15 @@ add('/api/captures/{id}','get','Read scoped durable capture status');
 add('/api/installations','get','Membership-scoped saved link/pixel inspection and live 24h recorded-event status; registry entries are not installations');
 add('/api/pages/{site}/{page}/check-installation','post','Inspect an exact registered URL and bounded same-origin scripts; no JavaScript execution or consent; public HTTPS only outside the configured local demo');
 add('/api/campaigns','get','Membership-scoped portfolio counts, ordered CTA funnels and investigation rules');
+add('/api/intelligence/predict','post','Membership-scoped local SASRec next-action ranking; requires CSRF, compatible retained model and registered history',true,intelligencePredictSchema);
+add('/api/intelligence/euler/predict','post','Exposure-time EulerNet 30-second click estimate with explicit validation status; CSRF and membership required',true,eulerPredictSchema);
+add('/api/intelligence/analyze','post','Run SASRec and EulerNet against the same scoped exposure history; keep their objectives and outputs separate',true,jointPredictSchema);
+for(const [route,schema,summary] of [
+ ['/api/intelligence/status',intelligenceScopeSchema,'Read source/page/revision-scoped local SASRec status and held-out evaluation'],
+ ['/api/intelligence/dataset',intelligenceDatasetSchema,'Owner/administrator audited export of registered within-view action sequences; no view or session identifiers'],
+ ['/api/intelligence/euler/status',intelligenceScopeSchema,'Read source/page/revision-scoped local EulerNet status, calibration and held-out baseline comparisons'],
+ ['/api/intelligence/euler/dataset',intelligenceDatasetSchema,'Owner/administrator audited export of fully observed exposure-click windows; incomplete observations excluded'],
+] as const){add(route,'get',summary);((paths[route] as any).get).parameters=Object.entries(schema.properties).map(([name,value])=>({name,in:'query',required:true,schema:value}));}
 add('/api/reports/versions','get','Independent revision_a and revision_b reports; each keeps its own cohort and reference');
 add('/api/pages/{site}/{page}/policy','patch','Owner/administrator registered campaign, primary CTA/action and diagnostic policy',true,pagePolicySchema);
 add('/api/operations','get','Owner-only maintenance settings, queue, durable runs/alerts and aggregate telemetry');

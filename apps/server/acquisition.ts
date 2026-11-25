@@ -58,6 +58,9 @@ export async function withdrawAcquisitionUnit(db:DB,siteId:string,visitId:string
   const viewIds=await tx.query("SELECT view_id FROM views WHERE site_id=$1 AND context->>'acquisition_id'=ANY($2::text[])",[siteId,visits.map(v=>v.id)]);
   for(const v of viewIds){await tx.query('SELECT id FROM jobs WHERE site_id=$1 AND view_id=$2 FOR UPDATE',[siteId,v.view_id]);for(const table of ['events','view_facts','jobs','views'])await tx.query(`DELETE FROM ${table} WHERE site_id=$1 AND view_id=$2`,[siteId,v.view_id]);}
   await tx.query('DELETE FROM acquisition_visits WHERE site_id=$1 AND subject_hash=$2',[siteId,visit.subject_hash]);
+  // Models retain learned evidence. Revoke every earlier export/model for the site
+  // without keeping a visitor-to-checkpoint membership index.
+  await tx.query('UPDATE sites SET intelligence_version=$2 WHERE id=$1',[siteId,randomUUID()]);
   return {ok:true,deleted_visits:visits.length};
  });
 }

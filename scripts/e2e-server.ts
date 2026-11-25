@@ -9,8 +9,12 @@ import {createDemo} from '../apps/server/demo.js';
 import {importReference,type Manifest} from '../apps/server/references.js';
 import {seedRealDraft} from '../tests/fixtures.js';
 import {startWholeSiteFixture} from '../tests/e2e/whole-site-fixture.js';
+import {seedEulerViews} from '../tests/euler-fixtures.js';
 if(!process.env.E2E_DATA_DIR||config.dataDir!==path.resolve(process.env.E2E_DATA_DIR))throw new Error('ISOLATED_TEST_DIRECTORY_REQUIRED');
 const db=await openDB(undefined,config.dataDir+'/database');await migrate(db);await seedRegistry(db,config.demoOrigin);await seedRealDraft(db);await seedTraffic(db,config.demoOrigin);
+// Additional matured exposure windows are explicit synthetic fixtures in the
+// disposable model-test profile, never generated into recorded activity.
+if(process.env.INFRARED_INTELLIGENCE_PYTHON)await seedEulerViews(db);
 const credentials={email:'browser-tests@local.invalid',password:token()};await db.query("INSERT INTO users(id,email,password_hash,role) VALUES('browser-owner',$1,$2,'owner')",[credentials.email,await passwordHash(credentials.password)]);await writeFile(path.join(config.dataDir,'admin-credentials.json'),JSON.stringify(credentials),{mode:0o600,flag:'wx'});
 // Disposable, explicit E2E fixture only: new journeys reuse a scoped authenticated
 // session so expanding the suite cannot exhaust the real login rate limiter.
