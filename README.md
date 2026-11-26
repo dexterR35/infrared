@@ -1,6 +1,6 @@
 # Infrared
 
-Private, self-hosted website analytics: click and scroll heatmaps, element engagement, funnels, acquisition and spend, A/A and A/B experiments, experience diagnostics and optional journey intelligence. Each website is a separate project with its own tracking key, pages, reports, reference layouts and access permissions.
+Private, self-hosted website analytics and predictive intelligence: click and scroll heatmaps, element engagement, funnels, acquisition and spend, A/A, A/B and adaptive experiments, experience diagnostics, and local machine-learning models that predict element clicks and conversions, explain their predictions, and monitor themselves. It works for any kind of website (e-commerce, fashion, finance, SaaS, travel, gaming, media, education and more). Each website is a separate project with its own tracking key, pages, reports, reference layouts, models and access permissions.
 
 Infrared collects only on websites an owner has approved, only on paths your rules allow, only after the visitor consents, and never across websites. It uses no cookies on your visitors' browsers and never reads form values or page text.
 
@@ -20,13 +20,14 @@ More screenshots: [before activity](docs/screenshots/overview-before-activity.pn
 1. [Features](#features)
 2. [Choose how to run it](#choose-how-to-run-it)
 3. [Install on your computer](#install-on-your-computer)
-4. [Install on a server (production)](#install-on-a-server-production)
-5. [Connect a website](#connect-a-website)
-6. [Security](#security)
-7. [Operations, backup and restore](#operations-backup-and-restore)
-8. [Configuration reference](#configuration-reference)
-9. [Development](#development)
-10. [FAQ](#faq)
+4. [Predictive intelligence (optional)](#predictive-intelligence-optional)
+5. [Install on a server (production)](#install-on-a-server-production)
+6. [Connect a website](#connect-a-website)
+7. [Security](#security)
+8. [Operations, backup and restore](#operations-backup-and-restore)
+9. [Configuration reference](#configuration-reference)
+10. [Development](#development)
+11. [FAQ](#faq)
 
 ---
 
@@ -35,7 +36,10 @@ More screenshots: [before activity](docs/screenshots/overview-before-activity.pn
 **Projects and collection**
 - Website projects: add an HTTPS website once. Infrared prepares its Home page, a unique site key and one installation snippet.
 - Whole-site mode discovers pages by canonical path on first visit, within include/exclude rules and path patterns. Sensitive paths (login, account, admin, checkout, cart, payment, password and similar) are excluded by default, including their sub-paths. Selected-page mode remains available for exact URLs.
-- Automatic structural discovery of up to 100 elements per view (headers, navigation, sections, buttons, links), without reading text, URLs or form values.
+- Automatic structural discovery of up to 100 elements per view (headers, navigation, sections, buttons, links, images, videos), without reading text, URLs or form values.
+- One element vocabulary for every industry: mark public elements with `data-hm-type` (`button`, `link`, `banner`, `offer`, `product_card`, `game_card`, `image`, `video`, `form`, `input`, `calculator`, `navigation`, `pricing`, `search`, `filter`, `custom`).
+- Business conversion goals: registration, purchase, add to cart, loan application, booking, subscription, lead, quote, download, trial, enrolment, appointment, or your own `custom.<name>` goal, configured per page.
+- Industry profiles: a page's product label (for example `fashion`, `credits`, `hotels`, `saas`) selects suggested goals and key element types for 12 industries. Regulated sectors (finance, gambling, healthcare) keep analysis on aggregate design and usability.
 - Owner approval per website, recording the reviewed consent policy version. Events signed with any other policy version are rejected.
 - Per-page pause/resume, a workspace-wide emergency stop, and project archiving.
 - Installation screen with a link and pixel check (static, SSRF-safe) and live activity status.
@@ -44,9 +48,23 @@ More screenshots: [before activity](docs/screenshots/overview-before-activity.pn
 - Heatmaps: clicks, scroll reach, elements, repeated clicks and clicks with no response, drawn on a reviewed screenshot of the page.
 - Overview across pages, funnels, comparisons, page versions, data quality and diagnostics (load speed, layout stability, error signals).
 - Acquisition: backend-registered visits, registrations, qualified acquisitions, daily spend and cost per acquisition.
-- Experiments: A/A and A/B tests with stable assignment, power planning, allocation (SRM) checks, guardrails and a frozen final readout.
-- Optional predictive intelligence: one-click database training, daily/weekly retraining, loss charts, held-out metrics, version rollback, interactive journeys, element reviews, and separate next-action, click and primary-action conversion models (SASRec/EulerNet; one-time Python runtime setup). See [Intelligence](docs/INTELLIGENCE.md).
+- Experiments: A/A and A/B tests with stable assignment, power planning, allocation (SRM) checks, guardrails and a frozen final readout, plus a Bayesian readout (probability that the treatment is better, with a 95% credible interval).
+- Adaptive experiments: campaign-level Thompson sampling that shifts traffic toward the better variant each day, always keeping at least 10% on each arm.
 - Sortable, searchable, paginated tables, CSV and PNG exports, market/product/brand filters.
+
+**Predictive intelligence** (optional, runs locally on the CPU, one model set per website and page)
+- **Element intelligence:** CatBoost predicts the probability that each element is clicked within 30 seconds of being seen, and a CatBoost ranker orders elements. Compare all elements for a device in one click.
+- **Explanations:** SHAP shows which factors raised or lowered each prediction (element, device, traffic source, scroll reach, load speed, placement, font size, contrast and more).
+- **Conversion intelligence:** a separate model for the page's primary action, plus time-to-conversion curves (Kaplan–Meier).
+- **Design intelligence:** placement, first-screen visibility, font size, colour contrast and visual density measured from approved screenshots. Optional local saliency, SigLIP/CLIP image analysis, OCR and copy embeddings.
+- **Experiment intelligence:** Fisher exact test, device-adjusted effect (EconML), uplift by device, and offline evaluation of Thompson sampling and Vowpal Wabbit policies on closed randomized tests.
+- **Journey and attention intelligence:** observed paths, Markov baseline, next-action ranking (SASRec), and how many views actually saw each element.
+- **Traffic intelligence:** unusual-view detection (Isolation Forest), behaviour clusters (HDBSCAN) and training-to-test distribution shift.
+- **Model management:** one-click or scheduled training. Each run benchmarks CatBoost, LightGBM, XGBoost and EulerNet against logistic and constant baselines on a chronological holdout, then versions the models. Weak recorded models wait for review instead of going live. One-click rollback.
+- **Live model monitoring:** scores the published model on traffic that arrived after training, checks lift over baseline, calibration, ranking quality and feature drift (PSI), and returns Healthy, Watch, Retrain or Collect more data.
+- Research tools: Optuna tuning with local MLflow tracking, and DeepFM and DIN challengers from the command line.
+
+See [Intelligence](docs/INTELLIGENCE.md) and [Predictive build history](docs/PREDICTIVE-BUILD-2026-11-26.md).
 
 **Operations**
 - Roles: owner, administrator, analyst, installer, viewer, each scoped to the websites they are members of.
@@ -103,6 +121,38 @@ pnpm admin create-user     # or: npm run admin -- create-user
 ```
 
 Data is stored in `.local/` inside the project folder. On Windows, run the commands in PowerShell; `.env` values work the same way. Paths are resolved from the project folder, so Infrared works no matter which folder you start it from.
+
+---
+
+## Predictive intelligence (optional)
+
+Analytics works without Python. To enable the models, install the two Python runtimes once, from the project folder (Windows shown; use `bin/` instead of `Scripts/` on Linux and macOS):
+
+```sh
+# Models used by the dashboard (CatBoost, LightGBM, XGBoost, SHAP, PyTorch, scikit-learn)
+py -3.13 -m venv .local/intelligence-venv
+.local/intelligence-venv/Scripts/python -m pip install -r apps/intelligence/requirements.txt
+
+# Optional research runtime (EconML, SciPy, Polars, Optuna, MLflow, OCR, image and text models)
+py -3.12 -m venv .local/predictive-research
+.local/predictive-research/Scripts/python -m pip install -r apps/intelligence/research/requirements.txt
+.local/predictive-research/Scripts/python apps/intelligence/research/prepare_models.py   # ~900 MB, once
+```
+
+Set `INFRARED_INTELLIGENCE_PYTHON` to the first interpreter. The research runtime is detected automatically from `.local/predictive-research`. Then open **Analysis → Predictive intelligence**, choose a page, data source and date range, and train.
+
+How much data you need (rough guide; outcomes and variety matter more than raw counts):
+
+| Recorded sessions | What to rely on |
+| --- | --- |
+| Under 1,000 | Heatmaps, funnels and statistical experiments |
+| 1,000–10,000 | Logistic baseline, basic CatBoost |
+| 10,000–50,000 | CatBoost, LightGBM, SHAP explanations |
+| 50,000+ | Rankers, DeepFM and sequence models, once they beat CatBoost on your data |
+
+Models are trained per website and page, and never on another website's data. Predicted attention is an estimate, not eye-tracking. A prediction shows association, not cause: use an experiment to confirm that a change helps.
+
+An optional Docker Compose setup with PostgreSQL and a persistent research service is in [infra/predictive](infra/predictive/compose.yaml).
 
 ---
 
@@ -324,7 +374,12 @@ All settings live in `.env` (see [.env.example](.env.example)).
 | `HEATMAP_BACKUP_DIR` | `DATA_DIR/backups` | Scheduled backups |
 | `DATABASE_URL` | empty | Hosted PostgreSQL/Supabase (port 5432, verified TLS, private schema) |
 | `HEATMAP_OTEL_METRICS_ENDPOINT` | empty | Optional OTLP/HTTP metrics receiver |
-| `INFRARED_INTELLIGENCE_PYTHON` | `python` | Optional Python for journey intelligence |
+| `INFRARED_INTELLIGENCE_PYTHON` | `python` | Python for predictive intelligence models |
+| `INFRARED_RESEARCH_PYTHON` | `.local/predictive-research` | Optional research runtime (causal analysis, screenshot models) |
+| `INFRARED_RESEARCH_TOKEN` | empty | Shared secret (32+ characters) for the optional persistent research service on loopback |
+| `INFRARED_RESEARCH_REDIS` | empty | Optional Redis URL to share research capacity between processes |
+| `INFRARED_VISION_MODEL` / `INFRARED_COPY_MODEL` | prepared models | Alternative local SigLIP/CLIP and Sentence Transformers folders |
+| `INFRARED_OCR` | `rapidocr` | `rapidocr`, `1` (Tesseract) or `off` |
 
 Blank port and bind values are rejected on purpose: remove the line to use the default.
 
@@ -338,6 +393,11 @@ pnpm test           # unit and integration tests (Vitest)
 pnpm build          # dashboard, SDK and OpenAPI
 pnpm test:e2e       # browser tests (Playwright, disposable data)
 pnpm release:check  # pinned versions and SDK size budget
+pnpm build:archive  # build plus a hashed ZIP snapshot in .local/build-history
+
+# Python model and research tests
+.local/intelligence-venv/Scripts/python -m unittest discover -s apps/intelligence
+.local/predictive-research/Scripts/python -m unittest discover -s apps/intelligence/research
 ```
 
 Architecture and data: [ARCHITECTURE](docs/ARCHITECTURE.md) · [DATA_DICTIONARY](docs/DATA_DICTIONARY.md) · [OPENAPI](docs/OPENAPI.json) · [CONSENT_INTEGRATION](docs/CONSENT_INTEGRATION.md) · [ACQUISITION_EXPERIMENTS](docs/ACQUISITION_EXPERIMENTS.md) · [INTELLIGENCE](docs/INTELLIGENCE.md). A non-technical feature tour is in [README2.md](README2.md).
@@ -348,7 +408,11 @@ Architecture and data: [ARCHITECTURE](docs/ARCHITECTURE.md) · [DATA_DICTIONARY]
 
 **Do I need Express.js?** No. Infrared's server uses Fastify, installed automatically with the other dependencies. Adding Express would not add anything.
 
-**Do I need Docker, Redis or a database server?** No. The built-in database is enough for one server. PostgreSQL is optional.
+**Do I need Docker, Redis or a database server?** No. The built-in database is enough for one server. PostgreSQL, Redis and Docker are optional.
+
+**Do I need a GPU or an LLM for predictive intelligence?** No. All models run locally on the CPU, and no data leaves your server.
+
+**Which websites does it work for?** Any. The tracking, models and reports are the same for every industry. Only the elements, goals and page settings differ.
 
 **Can I run it on my PC and track my live website?** Only if the collector is reachable over public HTTPS (for example through a tunnel). For real use, run it on a server.
 

@@ -5,7 +5,7 @@ export async function serviceDatabase():Promise<DB> {
   if(!config.databaseUrl)throw new Error('Independent services require DATABASE_URL. Use pnpm start for native PGlite mode.');
   const db=await openDB(config.databaseUrl);
   const [schema]=await db.query('SELECT max(version) AS version FROM schema_migrations');
-  if(Number(schema?.version)<15){await db.close();throw new Error('Run pnpm db:migrate before starting services.');}
+  if(Number(schema?.version)<17){await db.close();throw new Error('Run pnpm db:migrate before starting services.');}
   return db;
 }
 

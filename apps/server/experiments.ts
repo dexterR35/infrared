@@ -1,3 +1,4 @@
+import {posteriorImprovement} from '../../packages/domain/bayesian-experiment.js';
 import {randomUUID} from 'node:crypto';
 import type {DB} from '../../packages/db/index.js';
 import type {ExperimentInput} from '../../packages/contracts/acquisition.js';
@@ -23,7 +24,7 @@ export async function changeExperimentState(db:DB,id:string,status:'running'|'pa
   if(e.status===status)return publicExperiment(e);
   if(e.status==='completed'||(status==='paused'&&e.status!=='running')||(status==='completed'&&e.status==='draft'))throw new Problem(409,'INVALID_EXPERIMENT_TRANSITION');
   if(status==='running'){
-   const{page,site}=await eligiblePage(tx,e.site_id,e.page_key);if(page.revision!==e.revision||canonical(acquisitionContext(page,site))!==canonical(e.context))throw new Problem(409,'EXPERIMENT_CONTEXT_CHANGED');
+   const{page,site}=await eligiblePage(tx,e.site_id,e.page_key);const context=acquisitionContext(page,site);if(!('acquisition_goal' in e.context))delete context.acquisition_goal;if(page.revision!==e.revision||canonical(context)!==canonical(e.context))throw new Problem(409,'EXPERIMENT_CONTEXT_CHANGED');
    const[other]=await tx.query("SELECT id FROM experiments WHERE site_id=$1 AND page_key=$2 AND id<>$3 AND status IN ('running','paused')",[e.site_id,e.page_key,e.id]);if(other)throw new Problem(409,'PAGE_EXPERIMENT_ALREADY_ACTIVE');
   }
   const[next]=await tx.query("UPDATE experiments SET status=$2,started_at=CASE WHEN $2='running' THEN COALESCE(started_at,now()) ELSE started_at END,active_seconds=active_seconds+CASE WHEN status='running' THEN GREATEST(0,EXTRACT(epoch FROM(now()-last_started_at))) ELSE 0 END,last_started_at=CASE WHEN $2='running' THEN now() ELSE NULL END,completed_at=CASE WHEN $2='completed' THEN now() ELSE NULL END WHERE id=$1 RETURNING *",[id,status]);
@@ -41,14 +42,15 @@ export async function experimentReadout(db:DB,id:string,source:'recorded'|'seede
  const arm=(variant:string)=>rows.filter(r=>r.variant===variant).reduce<{variant:string;assigned:number;rendered:number;mature:number;successes:number}>((a,r)=>({variant,assigned:a.assigned+r.assigned,rendered:a.rendered+r.rendered,mature:a.mature+r.mature,successes:a.successes+r.successes}),{variant,assigned:0,rendered:0,mature:0,successes:0});
  const control=arm(e.control_variant),treatment=arm(e.treatment_variant),pending=total-control.mature-treatment.mature;
  const activeDays=(Number(e.active_seconds)+(e.status==='running'?Math.max(0,(Date.now()-new Date(e.last_started_at).getTime())/1000):0))/86400;
- const decision=experimentDecision({kind:e.kind,status:e.status,source,control,treatment,pending,active_days:activeDays,minimum_days:e.minimum_days,required_per_arm:e.required_per_arm});
+ const adaptive=e.kind==='adaptive';
+ const decision=adaptive?{ready:false,exploratory:true,blockers:['ADAPTIVE_ALLOCATION'],decision:'DESCRIPTIVE_ONLY',effect:null,srm:{failed:false,p_value:null,threshold:.001},definition:'Observed outcomes under adaptive assignment. Allocation changes with matured campaign outcomes, so fixed-horizon comparisons do not apply.'}:experimentDecision({kind:e.kind,status:e.status,source,control,treatment,pending,active_days:activeDays,minimum_days:e.minimum_days,required_per_arm:e.required_per_arm});
  if(e.evidence_pruned){decision.blockers.push('HISTORY_EXPIRED');decision.ready=false;decision.decision=source==='seeded'?'SAMPLE_DATA':'INCONCLUSIVE';decision.exploratory=true;}
  if(e.privacy_exclusions&&source==='recorded'){decision.blockers.push('PRIVACY_EXCLUSIONS');decision.ready=false;decision.decision='INCONCLUSIVE';decision.exploratory=true;}
  const behavior=await tx.query("SELECT a.variant,f.facts FROM views v JOIN acquisition_visits a ON a.id=v.context->>'acquisition_id' AND a.site_id=v.site_id JOIN view_facts f ON f.site_id=v.site_id AND f.view_id=v.view_id WHERE a.experiment_id=$1 AND v.data_source=$2 AND a.data_source=$2 AND f.has_page_view=true AND f.aggregation_version>=3 LIMIT 50001",[id,source]);if(behavior.length>50000)throw new Problem(422,'EXPERIMENT_REPORT_BUDGET');
  const[page]=await tx.query('SELECT primary_cta_id,primary_action_id FROM pages WHERE site_id=$1 AND page_key=$2',[e.site_id,e.page_key]);
  const guardrails=[e.control_variant,e.treatment_variant].map(variant=>{const selected=behavior.filter(r=>r.variant===variant),summary=engagement(selected.map(r=>({facts:r.facts,segments:Object.values(r.facts.segments) as any[]})),page.primary_cta_id,page.primary_action_id);return {variant,tracked_views:selected.length,...summary};});
  const targetPp=100*e.baseline_rate*e.mde_relative;
- return {experiment:publicExperiment(e),suppressed:false as const,data_source:source,as_of:new Date().toISOString(),control,treatment,pending,active_days:activeDays,...decision,guardrails,planned_effect_pp:targetPp,practically_promising:decision.ready&&decision.effect!==null&&decision.effect.difference_pp>=targetPp,device_slices:rows.map(r=>({...r,exploratory:true})),allocation:'50/50 at the site-scoped unit; fixed for the experiment',multiplicity:'One prespecified primary comparison per experiment. Device slices and sampled behavior guardrails are exploratory and need a separate rollout review. No pooled winner across markets or correction across separately run experiments is claimed.'};
+ return {experiment:publicExperiment(e),suppressed:false as const,data_source:source,as_of:new Date().toISOString(),control,treatment,pending,active_days:activeDays,...decision,posterior:adaptive?null:posteriorImprovement(control,treatment),guardrails,planned_effect_pp:targetPp,practically_promising:decision.ready&&decision.effect!==null&&decision.effect.difference_pp>=targetPp,device_slices:rows.map(r=>({...r,exploratory:true})),allocation:adaptive?'Daily campaign-level Thompson sampling with at least 10% exploration per arm':'50/50 at the site-scoped unit; fixed for the experiment',multiplicity:'One prespecified primary comparison per experiment. Device slices and sampled behavior guardrails are exploratory and need a separate rollout review. No pooled winner across markets or correction across separately run experiments is claimed.'};
  };
  return inTransaction?read(db):db.transaction(read);
 }

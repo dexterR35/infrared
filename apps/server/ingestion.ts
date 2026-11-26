@@ -48,7 +48,7 @@ export async function ingest(db:DB,b:Batch,origin:string,source:'recorded'|'seed
    if(!site.auto_discovery)throw new Problem(422,'DISCOVERY_DISABLED');
    const discovered=[...new Set([...page.elements,...b.context.auto_elements])];
    if(discovered.length>200)throw new Problem(422,'ELEMENT_LIMIT');
-   const actions=[...new Set([...page.actions,...b.context.auto_elements.filter(id=>/^auto\.(button|a)\./.test(id))])];
+   const actions=[...new Set([...page.actions,...b.context.auto_elements.filter(id=>/^auto\.(button|a|link)\./.test(id))])];
    if(actions.length>100)throw new Problem(422,'ACTION_LIMIT');
    if(discovered.length!==page.elements.length||actions.length!==page.actions.length){
     await tx.query('UPDATE pages SET elements=$3,actions=$4 WHERE site_id=$1 AND page_key=$2',[site.id,page.page_key,JSON.stringify(discovered),JSON.stringify(actions)]);

@@ -11,6 +11,7 @@ export type ClickEstimate = {
   probability: number;
   validation_state: EulerManifest['validation_state'];
   unseen_context: string[];
+  catboost?: {probability:number; validation_state?:EulerManifest['validation_state']; base_log_odds:number; scenario_defaults?:Record<string,string>; contributions:Record<string,number>} | null;
 };
 const reviewLabels = {
   fixture_only: 'Generated samples · Pipeline validation only',
@@ -68,6 +69,17 @@ export function EulerSetup({
     </div>
   );
 }
+export function CatBoostEstimate({result}: {result: ClickEstimate}) {
+  const prediction = result.catboost;
+  if (!prediction) return null;
+  return <section><h4>CatBoost estimate · {(100 * prediction.probability).toFixed(1)}%</h4>
+    {prediction.scenario_defaults && <p>Scenario uses training defaults · {Object.entries(prediction.scenario_defaults).map(([f,v])=>f.replaceAll('_',' ')+' = '+v).join(' · ')}</p>}
+    <p>{reviewLabels[prediction.validation_state??'needs_review']}</p>
+    <p>Feature contributions to this prediction in log-odds, starting from {prediction.base_log_odds.toFixed(2)}.</p>
+    <ul>{Object.entries(prediction.contributions).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).map(([field,value])=>
+      <li key={field}>{field.replaceAll('_',' ')} · {value > 0 ? '+' : ''}{value.toFixed(3)}</li>)}</ul>
+    <p>These associations describe the fitted model. Use a randomized experiment to measure design impact.</p></section>;
+}
 export function ClickResult({result}: {result: ClickEstimate}) {
   return (
     <div className="intelligence-click-result" role="region" aria-label="EulerNet click estimate">
@@ -77,6 +89,7 @@ export function ClickResult({result}: {result: ClickEstimate}) {
         after its first qualified exposure, among windows observed for the full 30 seconds.
       </p>
       <p>{reviewLabels[result.validation_state]}. This outcome differs from SASRec's next recorded interaction.</p>
+      <CatBoostEstimate result={result} />
       {result.unseen_context.length > 0 && (
         <p className="intelligence-note">
           Some context values were absent or below support in training; the model used its unknown-context
@@ -104,7 +117,7 @@ export function EulerEvaluation({manifest}: {manifest: EulerManifest}) {
       </p>
       <DataTable<any>
         name="Click model evaluation"
-        data={(['eulernet', 'logistic', 'constant'] as const).map((name) => ({name, ...manifest.evaluation[name]}))}
+        data={[...(['eulernet', 'logistic', 'constant'] as const).map((name) => ({name, ...manifest.evaluation[name]})), ...Object.entries(manifest.tabular?.status === 'evaluated' ? manifest.tabular.metrics : {}).map(([name,metrics]) => ({name,...metrics}))]}
         rowId={(row) => row.name}
         columns={[
           {
@@ -116,13 +129,18 @@ export function EulerEvaluation({manifest}: {manifest: EulerManifest}) {
                 ? 'EulerNet'
                 : row.name === 'logistic'
                   ? 'Logistic regression'
-                  : 'Observed-rate baseline',
+                  : row.name === 'constant' ? 'Observed-rate baseline' : row.name,
           },
           {id: 'log_loss', label: 'LOG LOSS', value: (row) => row.log_loss, render: (row) => row.log_loss.toFixed(3)},
           {id: 'brier', label: 'BRIER', value: (row) => row.brier, render: (row) => row.brier.toFixed(3)},
           {id: 'ece', label: 'CALIBRATION ERROR', value: (row) => row.ece, render: (row) => row.ece.toFixed(3)},
         ]}
       />
+      {manifest.tabular?.status === 'constant_features' && <p>All training contexts were identical. Tree benchmarks require variation.</p>}
+      {manifest.tabular?.status === 'evaluated' && <Collapsible title="CatBoost feature importance">
+        <p>Mean absolute SHAP contribution in log-odds on up to 512 held-out exposures.</p>
+        <ul>{Object.entries(manifest.tabular.mean_absolute_shap).sort((a,b)=>b[1]-a[1]).map(([field,value])=><li key={field}>{field.replaceAll('_',' ')} · {value.toFixed(3)}</li>)}</ul>
+      </Collapsible>}
       <p>
         Lower values are better. EulerNet AUC: {manifest.evaluation.eulernet.auc?.toFixed(3) ?? 'unavailable'}.
         Calibration is fitted on validation views; these results use later test views.

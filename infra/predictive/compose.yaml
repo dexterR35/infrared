@@ -1,0 +1,49 @@
+name: infrared-predictive
+services:
+  app:
+    image: infrared-predictive:local
+    build:
+      context: ../..
+      dockerfile: infra/predictive/Dockerfile
+    init: true
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:8080:8080"
+    environment:
+      DATABASE_URL: postgres://infrared:${INFRARED_DB_PASSWORD:?Set a URL-safe database password}@db:5432/infrared
+      INFRARED_RESEARCH_TOKEN: ${INFRARED_RESEARCH_TOKEN:-}
+    volumes:
+      - artifacts:/var/lib/infrared
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: infrared
+      POSTGRES_DB: infrared
+      POSTGRES_PASSWORD: ${INFRARED_DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U infrared -d infrared"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - database:/var/lib/postgresql/data
+  research:
+    profiles: ["research"]
+    image: infrared-predictive:local
+    network_mode: service:app
+    command: ["/opt/research/bin/python","apps/intelligence/research/service.py"]
+    init: true
+    depends_on: [app,redis]
+    environment:
+      INFRARED_RESEARCH_TOKEN: ${INFRARED_RESEARCH_TOKEN:-}
+      INFRARED_RESEARCH_REDIS: redis://redis:6379/0
+  redis:
+    profiles: ["research"]
+    image: redis:7-alpine
+    command: ["redis-server","--save","","--appendonly","no"]
+volumes:
+  artifacts:
+  database:

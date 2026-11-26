@@ -1,0 +1,17 @@
+**
+!apps/
+!apps/**
+!packages/
+!packages/**
+!scripts/
+!scripts/**
+!config/
+!config/**
+!package.json
+!package-lock.json
+!tsconfig.json
+!vite.config.ts
+**/__pycache__/
+**/*.pyc
+!docs/
+!docs/**

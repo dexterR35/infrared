@@ -1,7 +1,7 @@
 import {historyQuerySchema} from '../apps/server/table-data.js';
 import {writeFile} from 'node:fs/promises';
 import {batchSchema} from '../packages/contracts/events.js';
-import {intelligenceScopeSchema,intelligenceDatasetSchema,intelligencePredictSchema,eulerPredictSchema,jointPredictSchema,trainingSchema,trainingScheduleSchema,rollbackSchema} from '../packages/contracts/intelligence.js';
+import {monitorQuerySchema,intelligenceScopeSchema,intelligenceDatasetSchema,intelligencePredictSchema,eulerPredictSchema,jointPredictSchema,trainingSchema,trainingScheduleSchema,rollbackSchema} from '../packages/contracts/intelligence.js';
 import {reportQuerySchema,installQuerySchema,portfolioQuerySchema,pagePolicySchema,operationSettingsSchema} from '../packages/security/validation.js';
 import {acquisitionVisitSchema,acquisitionRenderSchema,acquisitionOutcomeSchema,acquisitionWithdrawSchema,registryImportSchema,experimentSchema,experimentStateSchema,spendSchema,acquisitionQuerySchema} from '../packages/contracts/acquisition.js';
 const paths:Record<string,unknown>={};
@@ -21,6 +21,9 @@ add('/api/campaigns','get','Membership-scoped portfolio counts, ordered CTA funn
 add('/api/intelligence/predict','post','Membership-scoped local SASRec next-action ranking; requires CSRF, compatible retained model and registered history',true,intelligencePredictSchema);
 add('/api/intelligence/euler/predict','post','Exposure-time EulerNet 30-second click estimate with explicit validation status; CSRF and membership required',true,eulerPredictSchema);
 add('/api/intelligence/analyze','post','Run SASRec and EulerNet against the same scoped exposure history; keep their objectives and outputs separate',true,jointPredictSchema);
+add('/api/intelligence/elements/predict','post','Rank supported elements at a shared device and exposure history',true,eulerPredictSchema);
+add('/api/intelligence/design/visual','post','Compute local visual saliency and configured offline semantic models on an approved image',true,intelligenceScopeSchema);
+add('/api/experiments/{id}/causal','post','Editor-only adjusted aggregate effect and offline policy evaluation on a valid closed experiment');
 add('/api/intelligence/train','post','Owner/administrator background database training; returns 202 with persistent run IDs',true,trainingSchema);
 ((paths['/api/intelligence/train'] as any).post).responses[202]={description:'Training jobs queued'};
 add('/api/intelligence/training/schedule','post','Save scoped daily/weekly retraining or disable it; requires editor role and CSRF',true,trainingScheduleSchema);
@@ -29,7 +32,9 @@ add('/api/intelligence/conversion/predict','post','Calibrated primary-action con
 for(const [route,schema,summary] of [
  ['/api/intelligence/status',intelligenceScopeSchema,'Read source/page/revision-scoped local SASRec status and held-out evaluation'],
  ['/api/intelligence/training',intelligenceScopeSchema,'Read scoped persistent jobs, loss history, model versions, schedule and registered experiment variants'],
+ ['/api/intelligence/design',intelligenceScopeSchema,'Measure the latest approved screenshot and registered placements for this page context'],
  ['/api/intelligence/journey',intelligenceDatasetSchema,'Read cohort-suppressed within-view journey graph and exploratory element comparisons'],
+ ['/api/intelligence/monitor',monitorQuerySchema,'Score the published click or conversion model on views after its newest training view; calibration, baseline lift and feature drift'],
  ['/api/intelligence/conversion/status',intelligenceScopeSchema,'Read the separately trained primary-action conversion model and held-out evaluation'],
  ['/api/intelligence/dataset',intelligenceDatasetSchema,'Owner/administrator audited export of registered within-view action sequences; no view or session identifiers'],
  ['/api/intelligence/euler/status',intelligenceScopeSchema,'Read source/page/revision-scoped local EulerNet status, calibration and held-out baseline comparisons'],

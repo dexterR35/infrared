@@ -1,8 +1,9 @@
-import {MetricCard} from './components/card.js';
+import {businessGoals} from '../../../packages/domain/business-goals.js';
+import {industryFor, rankGoals} from '../../../packages/domain/industry-profiles.js';
+import {MetricCard, CardGrid} from './components/card.js';
 import {Collapsible} from './components/collapsible.js';
 import {Card} from './components/card.js';
 import {Button} from './components/button.js';
-import {FilterFields} from './components/filter-bar.js';
 import {FormField} from './components/form-field.js';
 import {useEffect, useState} from 'react';
 import {ArrowUpRight, Check, Download, FlaskConical, KeyRound, Plus, RefreshCw, Upload} from 'lucide-react';
@@ -13,7 +14,8 @@ import './growth.css';
 import {ExperimentBehavior} from './experiment-behavior.js';
 import {useInstallationChecks, InstallationStatus, InstallationCheckButton} from './installation-status.js';
 type Api = (url: string, body?: unknown, method?: string) => Promise<any>;
-export type GrowthScope = {site_id?: string; market: string; product: string; brand: string};
+import {type GrowthScope} from './growth-scope.js';
+export {ScopeFilters, scopePages, type GrowthScope} from './growth-scope.js';
 const n = (v: number | undefined) => (v === undefined ? '-' : v.toLocaleString('en-GB')),
   rate = (v: number | undefined) => (v === undefined ? '-' : v.toFixed(1) + '%');
 const readable = (s: string) => s.toLowerCase().replaceAll('_', ' ');
@@ -38,53 +40,6 @@ function useQuery(api: Api, url: string | null, refresh: number) {
     };
   }, [api, url, refresh]);
   return {data, error};
-}
-export function ScopeFilters({
-  pages,
-  sites,
-  value,
-  onChange,
-}: {
-  pages: any[];
-  sites: any[];
-  value: GrowthScope;
-  onChange: (v: GrowthScope) => void;
-}) {
-  const choices = {
-    market: [
-      ...new Set(pages.map((p) => p.market ?? sites.find((s) => s.id === p.site_id)?.market ?? 'unknown')),
-    ].sort(),
-    product: [...new Set(pages.map((p) => p.product))].sort(),
-    brand: [...new Set(sites.map((s) => s.brand ?? 'default'))].sort(),
-  };
-  return (
-    <FilterFields>
-      {(['market', 'product', 'brand'] as const).map((k) => (
-        <FormField
-          key={k}
-          category="select"
-          label={k[0].toUpperCase() + k.slice(1)}
-          aria-label={`Portfolio ${k}`}
-          value={value[k]}
-          onChange={(e) => onChange({...value, [k]: e.target.value})}
-        >
-          <option value="">All {k === 'product' ? 'products' : k === 'brand' ? 'brands' : 'markets'}</option>
-          {choices[k].map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </FormField>
-      ))}
-    </FilterFields>
-  );
-}
-export function scopePages(pages: any[], sites: any[], scope: GrowthScope) {
-  return pages.filter(
-    (p) =>
-      (!scope.site_id || p.site_id === scope.site_id) &&
-      (!scope.market || (p.market ?? sites.find((s) => s.id === p.site_id)?.market ?? 'unknown') === scope.market) &&
-      (!scope.product || p.product === scope.product) &&
-      (!scope.brand || (sites.find((s) => s.id === p.site_id)?.brand ?? 'default') === scope.brand),
-  );
 }
 // The import example follows the selected project: its website, market, currency and time zone.
 function importExample(site: any) {
@@ -753,6 +708,8 @@ export function AcquisitionDashboard({
                   value: (r) => r.measured_units,
                   render: (r) => (r.suppressed ? 'Suppressed' : n(r.measured_units)),
                 },
+                {id: 'goal', label: 'CONFIGURED GOAL', value:(r)=>r.goal},
+                {id: 'goal_completions', label: 'GOAL COMPLETIONS', value:(r)=>r.goal_completions},
                 {id: 'registration', label: 'REGISTRATIONS', value: (r) => r.registrations},
                 {id: 'qualified', label: 'ACQUISITIONS', value: (r) => r.qualified_acquisitions},
                 {
@@ -1034,6 +991,7 @@ export function ExperimentsDashboard({
               >
                 <option value="aa">A/A · validate the measurement</option>
                 <option value="ab">A/B · compare two experiences</option>
+                <option value="adaptive">Adaptive · campaign-level offer selection</option>
               </FormField>
               <FormField
                 category="select"
@@ -1042,8 +1000,25 @@ export function ExperimentsDashboard({
                 value={metric}
                 onChange={(e) => setMetric(e.target.value)}
               >
-                <option value="registration_completed">Completed registration</option>
-                <option value="qualified_acquisition">Qualified acquisition</option>
+                {(() => {
+                  // The page's product label selects an industry profile; every valid goal stays available.
+                  const chosen = pages.find((p) => p.site_id + '/' + p.page_key === pageId);
+                  const profile = industryFor(chosen?.product);
+                  const custom = chosen?.acquisition_goal?.startsWith('custom.') ? [chosen.acquisition_goal as string] : [];
+                  const {recommended, other} = rankGoals(businessGoals, profile);
+                  const name = (goal: string) =>
+                    goal === 'registration_completed' ? 'Completed registration' : goal === 'qualified_acquisition' ? 'Qualified acquisition' : readable(goal);
+                  return (
+                    <>
+                      <optgroup label={'Recommended · ' + profile.label}>
+                        {[...custom, ...recommended].map((goal) => <option key={goal} value={goal}>{name(goal)}</option>)}
+                      </optgroup>
+                      <optgroup label="Other goals">
+                        {other.map((goal) => <option key={goal} value={goal}>{name(goal)}</option>)}
+                      </optgroup>
+                    </>
+                  );
+                })()}
               </FormField>
               <FormField
                 label={<>Expected baseline rate · %</>}
@@ -1103,8 +1078,7 @@ export function ExperimentsDashboard({
               />
             </div>
             <p className="growth-section-note">
-              The power plan uses a two-sided 5% significance level, 80% power and 50/50 allocation. A/A variants must
-              render the same content in the host. Page context is frozen when the draft is created.
+              {kind==='adaptive'?'Each campaign starts at 50/50. Matured outcomes update the allocation daily, with at least 10% exploration per variant. The readout is descriptive.':'Fixed-horizon planning uses a two-sided 5% significance level, 80% power and equal allocation. A/A variants should offer the same experience.'}
             </p>
             <div className="growth-actions">
               <Button variant="primary" disabled={busy || !pageId} type="submit">

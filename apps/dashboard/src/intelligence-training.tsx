@@ -127,7 +127,7 @@ export function IntelligenceTraining({
             )
           : 0;
   return (
-    <section className="intelligence-setup" aria-label="Automatic model training">
+    <section id="predictive-model" className="intelligence-setup" aria-label="Automatic model training">
       <h3>Train from your activity</h3>
       <p>
         Infrared prepares private datasets from the database, trains in the background, and saves evaluated model
@@ -281,6 +281,7 @@ export function IntelligenceTraining({
               <LossChart points={run.progress} />
             </Suspense>
           )}
+          {run.manifest?.publication==='awaiting_review' && <p>Saved for review. Automatic deployment requires the held-out baseline checks to pass. An editor can select this version after reviewing its evaluation.</p>}
           {run.manifest && (
             <Collapsible title={<>Saved evaluation · {run.manifest.model_id.slice(0, 8)}</>}>
               <p>
@@ -289,6 +290,7 @@ export function IntelligenceTraining({
                 configuration and evidence validity.
               </p>
               <pre>{JSON.stringify(run.manifest.evaluation, null, 2)}</pre>
+              {'tabular' in run.manifest && run.manifest.tabular && <pre>{JSON.stringify(run.manifest.tabular,null,2)}</pre>}
             </Collapsible>
           )}
         </>
@@ -302,12 +304,12 @@ export function IntelligenceTraining({
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
-      {state && <VariantComparison experiments={state.experiments} source={scope.data_source} api={api} />}
+      {state && <VariantComparison experiments={state.experiments} source={scope.data_source} api={api} editable={editable} />}
     </section>
   );
 }
 
-function VariantComparison({experiments, source, api}: {experiments: Experiment[]; source: string; api: Api}) {
+function VariantComparison({experiments, source, api, editable}: {experiments: Experiment[]; source: string; api: Api; editable:boolean}) {
   const [chosen, setChosen] = useState(''),
     [readout, setReadout] = useState<any>(null),
     [error, setError] = useState('');
@@ -328,10 +330,10 @@ function VariantComparison({experiments, source, api}: {experiments: Experiment[
     };
   }, [api, chosen, source]);
   if (!experiments.length)
-    return <p className="subtle">Create an A/B experiment in Experiments to compare randomized variants here.</p>;
+    return <p id="predictive-experiment" className="subtle">Create an A/B experiment in Experiments to compare randomized variants here.</p>;
   return (
     <div>
-      <h3>A/B variant comparison</h3>
+      <h3 id="predictive-experiment">Experiment intelligence · A/B variant comparison</h3>
       <div className="intelligence-controls">
         <FormField category="select" label={<>Experiment</>} value={chosen} onChange={(e) => setChosen(e.target.value)}>
           <option value="">Choose an experiment</option>
@@ -374,6 +376,11 @@ function VariantComparison({experiments, source, api}: {experiments: Experiment[
             <p className="subtle">
               {readout.blockers?.join(' · ')}. Use the full experiment readout to review validity and guardrails.
             </p>
+            {readout.posterior && <p>Bayesian estimate · {(100*readout.posterior.probability).toFixed(1)}% probability that treatment converts better.
+              {' '}95% credible interval for the difference: {readout.posterior.low_pp.toFixed(2)} to {readout.posterior.high_pp.toFixed(2)} percentage points.
+              Independent uniform priors on matured outcomes. The experiment decision uses the prespecified fixed horizon.</p>}
+            {editable && readout.experiment?.kind==='ab' && readout.experiment?.status==='completed' && !readout.blockers?.length &&
+              <CausalEstimate key={chosen+source} chosen={chosen} source={source} api={api}/>}
             <a href="#experiments">Open Experiments</a>
           </>
         )
@@ -381,6 +388,23 @@ function VariantComparison({experiments, source, api}: {experiments: Experiment[
       {error && <p role="alert">{readable(error)}</p>}
     </div>
   );
+}
+
+function CausalEstimate({chosen,source,api}:{chosen:string;source:string;api:Api}){
+ const [result,setResult]=useState<{adjusted_effect_pp:number;interval_pp:number[];offline_thompson_policy_value:number;offline_vw_policy_value:number;fisher_p:number;device_effects?:{device:string;units:number;control_rate:number;treatment_rate:number;effect_pp:number;interval_pp:number[]}[]}|null>(null);
+ const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ async function run(){
+  setBusy(true);setError('');
+  try{setResult(await api('/api/experiments/'+encodeURIComponent(chosen)+'/causal',{data_source:source}));}
+  catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
+ return <section><Button variant="secondary" disabled={busy} onClick={()=>void run()}>{busy?'Estimating…':'Estimate adjusted experiment effect'}</Button>
+  {error && <p role="alert">{readable(error)}</p>}
+  {result && <><p>Device-adjusted effect {result.adjusted_effect_pp.toFixed(2)} percentage points · 95% interval {result.interval_pp.map(n=>n.toFixed(2)).join(' to ')} · Fisher exact p-value {result.fisher_p.toPrecision(3)}.</p>
+  <p>Offline Thompson sampling policy · estimated conversions per 100 assigned units {(100*result.offline_thompson_policy_value).toFixed(1)}. Vowpal Wabbit epsilon-greedy estimate · {(100*result.offline_vw_policy_value).toFixed(1)} per 100. Both evaluations use held-out randomized outcomes.</p>
+  {result.device_effects&&result.device_effects.length>0&&<><h4>Uplift by device · exploratory</h4><ul aria-label="Uplift by device">{result.device_effects.map(e=><li key={e.device}>{e.device} · {e.effect_pp.toFixed(2)} pp ({(100*e.control_rate).toFixed(1)}% → {(100*e.treatment_rate).toFixed(1)}%) · family-wise 95% interval {e.interval_pp.map(n=>n.toFixed(2)).join(' to ')} · {e.units} units</li>)}</ul>
+  <p className="subtle">Devices with fewer than 30 units per arm are omitted. Intervals are Bonferroni-adjusted across the reported devices; a segment difference is a hypothesis for a new test, not a targeting rule.</p></>}</>}
+ </section>;
 }
 
 export function ObservedJourney({
@@ -415,8 +439,9 @@ export function ObservedJourney({
   }, [api, query]);
   const outgoing = data?.edges.filter((e: any) => e.from === selected) ?? [];
   return (
-    <Card padding="normal" title={<>Observed user journey</>}>
+    <Card padding="normal" id="predictive-journey" title={<>Observed user journey</>}>
       <p>Select an action to explore the next observed steps. This map describes interactions inside one page view.</p>
+      {!data && <span id="predictive-attention" />}
       {data ? (
         <>
           <p className="subtle">
@@ -463,6 +488,12 @@ export function ObservedJourney({
           ) : (
             <p>No reportable next steps for this action in the selected period.</p>
           )}
+          <h3 id="predictive-attention">Attention intelligence</h3>
+          <p>Page views with at least half the element visible for one second. Visibility measures an opportunity to see an element.</p>
+          {data.attention?.length ? <ul>{data.attention.map((e:{element:string;views:number})=><li key={e.element}><code>{e.element}</code> · {e.views} views</li>)}</ul>:<p>No reportable exposures.</p>}
+          {data.primary_action_id && <><h3>Time to conversion</h3>
+            <p>Estimated cumulative probability of <code>{data.primary_action_id}</code> since page entry. Kaplan–Meier censors at first hidden event or last observation and assumes independent censoring.</p>
+            {data.survival?.length ? <ul>{data.survival.map((r:{seconds:number;probability:number})=><li key={r.seconds}>{r.seconds}s · {(100*r.probability).toFixed(1)}%</li>)}</ul>:<p>Insufficient reportable outcomes and follow-up.</p>}</>}
           <h3>Elements to review</h3>
           <p>
             Exploratory flags compare 95% click-rate intervals against reportable peer elements. Different placements

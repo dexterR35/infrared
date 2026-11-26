@@ -1,3 +1,4 @@
+import {treatmentProbability} from './adaptive-experiments.js';
 import {randomUUID} from 'node:crypto';
 import type {DB} from '../../packages/db/index.js';
 import type {VisitInput,OutcomeInput,SpendInput} from '../../packages/contracts/acquisition.js';
@@ -5,7 +6,7 @@ import {Problem,canonical,digest} from './security.js';
 import {dateWindow} from './campaigns.js';
 import {config} from './config.js';
 
-export function acquisitionContext(page:any,site:any){return {market:page.market??site.market??'unknown',product:page.product,brand:site.brand,locale:page.locale,page_family:page.page_family,currency:site.currency,report_timezone:site.report_timezone};}
+export function acquisitionContext(page:any,site:any){return {...(page.acquisition_goal&&page.acquisition_goal!=='registration_completed'?{acquisition_goal:page.acquisition_goal}:{}),market:page.market??site.market??'unknown',product:page.product,brand:site.brand,locale:page.locale,page_family:page.page_family,currency:site.currency,report_timezone:site.report_timezone};}
 export async function eligiblePage(db:DB,siteId:string,pageKey:string,lock=false){
  const[site]=await db.query('SELECT * FROM sites WHERE id=$1'+(lock?' FOR UPDATE':''),[siteId]);
  const[privacy]=await db.query("SELECT value FROM settings WHERE key='privacy'");
@@ -15,30 +16,34 @@ export async function eligiblePage(db:DB,siteId:string,pageKey:string,lock=false
 }
 export async function registerAcquisitionVisit(db:DB,siteId:string,b:VisitInput,source:'recorded'|'seeded'='recorded'){
  return db.transaction(async tx=>{
-  const {site,page}=await eligiblePage(tx,siteId,b.page_key,true);
+  const {site,page,privacy}=await eligiblePage(tx,siteId,b.page_key,true);
   if(!b.analytics_consent||!b.public_context||!page.campaign_codes.includes(b.campaign))throw new Problem(422,'ACQUISITION_CONTEXT_INVALID');
   if(site.environment!=='synthetic'&&b.policy_version!==site.consent_policy_version)throw new Problem(403,'CONSENT_POLICY_MISMATCH');
   const hash=digest(canonical(b)),subject=digest(siteId+'|'+b.unit_token);
   const[receipt]=await tx.query('SELECT * FROM acquisition_visits WHERE site_id=$1 AND receipt_id=$2',[siteId,b.receipt_id]);
   if(receipt){if(receipt.request_hash!==hash||receipt.data_source!==source)throw new Problem(409,'VISIT_RECEIPT_CONFLICT');return publicVisit(receipt);}
   let experiment:any=null,variant=page.variant,window=168;
+  let probability:number|null=null;
   if(b.experiment_id){
    [experiment]=await tx.query('SELECT * FROM experiments WHERE id=$1 AND site_id=$2 AND page_key=$3 FOR UPDATE',[b.experiment_id,siteId,b.page_key]);
    if(!experiment)throw new Problem(404,'EXPERIMENT_NOT_FOUND');
    const[existing]=await tx.query('SELECT * FROM acquisition_visits WHERE experiment_id=$1 AND subject_hash=$2',[experiment.id,subject]);
    if(existing){if(existing.data_source!==source)throw new Problem(409,'ASSIGNMENT_SOURCE_CONFLICT');return publicVisit(existing);}
    if(experiment.status!=='running')throw new Problem(409,'EXPERIMENT_NOT_RUNNING');
-   if(page.revision!==experiment.revision||canonical(acquisitionContext(page,site))!==canonical(experiment.context))throw new Problem(409,'EXPERIMENT_CONTEXT_CHANGED');
+   const current=acquisitionContext(page,site);
+   if(!('acquisition_goal' in experiment.context))delete current.acquisition_goal;
+   if(page.revision!==experiment.revision||canonical(current)!==canonical(experiment.context))throw new Problem(409,'EXPERIMENT_CONTEXT_CHANGED');
    const bucket=parseInt(digest(experiment.salt+'|'+subject).slice(0,12),16)/0x1000000000000;
-   variant=bucket<.5?experiment.control_variant:experiment.treatment_variant;window=experiment.attribution_hours;
+   if(experiment.kind==='adaptive')probability=await treatmentProbability(tx,experiment,source,b.campaign,site.intelligence_version,site.environment==='synthetic'?1:privacy.minimum_views);
+   variant=bucket<1-(probability??.5)?experiment.control_variant:experiment.treatment_variant;window=experiment.attribution_hours;
   }
   const[count]=await tx.query('SELECT count(*)::int AS n FROM acquisition_visits WHERE site_id=$1 AND created_at>=CURRENT_DATE',[siteId]);
   if(count.n>=Math.min(site.daily_quota,100000))throw new Problem(429,'ACQUISITION_SITE_QUOTA');
-  const id=randomUUID();const[row]=await tx.query('INSERT INTO acquisition_visits(id,site_id,page_key,receipt_id,request_hash,subject_hash,campaign,device,context,experiment_id,variant,revision,attribution_hours,policy_version,data_source) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *',[id,siteId,page.page_key,b.receipt_id,hash,subject,b.campaign,b.device,JSON.stringify(acquisitionContext(page,site)),experiment?.id??null,variant,page.revision,window,b.policy_version,source]);
+  const id=randomUUID();const[row]=await tx.query('INSERT INTO acquisition_visits(id,site_id,page_key,receipt_id,request_hash,subject_hash,campaign,device,context,experiment_id,variant,revision,attribution_hours,policy_version,data_source,treatment_probability,assignment_evidence_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *',[id,siteId,page.page_key,b.receipt_id,hash,subject,b.campaign,b.device,JSON.stringify(acquisitionContext(page,site)),experiment?.id??null,variant,page.revision,window,b.policy_version,source,probability,probability!==null?site.intelligence_version:null]);
   return publicVisit(row);
  });
 }
-function publicVisit(v:any){return {visit_id:v.id,experiment_id:v.experiment_id,variant:v.variant,revision:v.revision,page_key:v.page_key,campaign:v.campaign,device:v.device,created_at:new Date(v.created_at).toISOString(),attribution_hours:v.attribution_hours,data_source:v.data_source};}
+function publicVisit(v:any){return {...(v.treatment_probability!==null&&v.treatment_probability!==undefined?{treatment_probability:v.treatment_probability}:{}),visit_id:v.id,experiment_id:v.experiment_id,variant:v.variant,revision:v.revision,page_key:v.page_key,campaign:v.campaign,device:v.device,created_at:new Date(v.created_at).toISOString(),attribution_hours:v.attribution_hours,data_source:v.data_source};}
 export async function markAcquisitionRendered(db:DB,siteId:string,b:{visit_id:string;variant:string;revision:string}){
  return db.transaction(async tx=>{const[v]=await tx.query('SELECT * FROM acquisition_visits WHERE id=$1 AND site_id=$2 FOR UPDATE',[b.visit_id,siteId]);if(!v)throw new Problem(404,'VISIT_NOT_FOUND');await eligiblePage(tx,siteId,v.page_key);
  if(v.variant!==b.variant||v.revision!==b.revision)throw new Problem(409,'RENDERED_VARIANT_MISMATCH');
@@ -78,20 +83,20 @@ export async function acquisitionReport(db:DB,f:any,siteIds:string[]){
  const dates=dateWindow({from:f.from??new Date(Date.now()-6*86400000).toISOString().slice(0,10),to:f.to??new Date().toISOString().slice(0,10)}),source=f.data_source??'recorded';if(!['recorded','seeded'].includes(source))throw new Problem(400,'INVALID_DATA_SOURCE');
  if(f.site_id&&!siteIds.includes(f.site_id))throw new Problem(404,'SITE_NOT_FOUND');
  const sites=f.site_id?[f.site_id]:siteIds;
- const visits=await db.query("SELECT v.*,p.name,s.environment,COALESCE(o.registration,false) AS registration,COALESCE(o.qualified,false) AS qualified FROM acquisition_visits v JOIN sites s ON s.id=v.site_id JOIN pages p ON p.site_id=v.site_id AND p.page_key=v.page_key LEFT JOIN LATERAL (SELECT bool_or(kind='registration_completed') AS registration,bool_or(kind='qualified_acquisition') AS qualified FROM acquisition_outcomes WHERE visit_id=v.id) o ON true WHERE v.site_id=ANY($1::text[]) AND v.created_at>=$2 AND v.created_at<$3 AND v.data_source=$4 AND ($5::text IS NULL OR v.page_key=$5) AND ($6::text IS NULL OR v.campaign=$6) ORDER BY v.created_at LIMIT 50001",[sites,dates.from,dates.to,source,f.page_key??null,f.campaign??null]);
+ const visits=await db.query("SELECT v.*,p.name,s.environment,COALESCE(o.registration,false) AS registration,COALESCE(o.qualified,false) AS qualified,COALESCE(o.goal,false) AS completed_goal FROM acquisition_visits v JOIN sites s ON s.id=v.site_id JOIN pages p ON p.site_id=v.site_id AND p.page_key=v.page_key LEFT JOIN LATERAL (SELECT bool_or(kind='registration_completed') AS registration,bool_or(kind='qualified_acquisition') AS qualified,bool_or(kind=COALESCE(v.context->>'acquisition_goal','registration_completed')) AS goal FROM acquisition_outcomes WHERE visit_id=v.id) o ON true WHERE v.site_id=ANY($1::text[]) AND v.created_at>=$2 AND v.created_at<$3 AND v.data_source=$4 AND ($5::text IS NULL OR v.page_key=$5) AND ($6::text IS NULL OR v.campaign=$6) ORDER BY v.created_at LIMIT 50001",[sites,dates.from,dates.to,source,f.page_key??null,f.campaign??null]);
  if(visits.length>50000)throw new Problem(422,'ACQUISITION_REPORT_BUDGET');
  const selected=visits.filter(v=>['market','product','brand'].every(k=>!f[k]||v.context[k]===f[k])&&(!f.device||f.device==='all'||v.device===f.device));
  const[privacy]=await db.query("SELECT value FROM settings WHERE key='privacy'");
  const groups=new Map<string,any>();
- for(const v of selected){const key=canonical([v.site_id,v.page_key,v.campaign,v.context]);let g=groups.get(key);if(!g){g={site_id:v.site_id,page_key:v.page_key,name:v.name,campaign:v.campaign,...v.context,context:v.context,environment:v.environment,visits:0,subjects:new Set<string>(),registrations:new Set<string>(),qualified:new Set<string>(),pending:0};groups.set(key,g);}g.visits++;g.subjects.add(v.subject_hash);if(v.registration)g.registrations.add(v.subject_hash);if(v.qualified)g.qualified.add(v.subject_hash);if(Date.now()<new Date(v.created_at).getTime()+v.attribution_hours*3600000)g.pending++;}
+ for(const v of selected){const key=canonical([v.site_id,v.page_key,v.campaign,v.context]);let g=groups.get(key);if(!g){g={site_id:v.site_id,page_key:v.page_key,name:v.name,campaign:v.campaign,...v.context,context:v.context,environment:v.environment,visits:0,subjects:new Set<string>(),registrations:new Set<string>(),qualified:new Set<string>(),goals:new Set<string>(),pending:0};groups.set(key,g);}g.visits++;g.subjects.add(v.subject_hash);if(v.completed_goal)g.goals.add(v.subject_hash);if(v.registration)g.registrations.add(v.subject_hash);if(v.qualified)g.qualified.add(v.subject_hash);if(Date.now()<new Date(v.created_at).getTime()+v.attribution_hours*3600000)g.pending++;}
  const spend=await db.query('SELECT * FROM acquisition_spend WHERE site_id=ANY($1::text[]) AND day>=$2::date AND day<$3::date AND data_source=$4',[sites,dates.from,dates.to,source]);
  const expectedDays=Math.ceil((Date.parse(dates.to)-Date.parse(dates.from))/86400000);
  const rows=[...groups.values()].map(g=>{
-  const {subjects,registrations,qualified,environment,context,...base}=g;if(environment!=='synthetic'&&subjects.size<privacy.value.minimum_views)return {site_id:g.site_id,page_key:g.page_key,name:g.name,suppressed:true};
+  const {subjects,registrations,qualified,goals,environment,context,...base}=g;if(environment!=='synthetic'&&subjects.size<privacy.value.minimum_views)return {site_id:g.site_id,page_key:g.page_key,name:g.name,suppressed:true};
   const costs=spend.filter(s=>s.site_id===g.site_id&&s.page_key===g.page_key&&s.campaign===g.campaign&&s.currency===g.currency&&canonical(s.context)===canonical(context));
   const blockers:string[]=[];if(!costs.length)blockers.push('SPEND_UNAVAILABLE');if(new Set(costs.map(s=>new Date(s.day).toISOString().slice(0,10))).size!==expectedDays)blockers.push('SPEND_DAYS_MISSING');if(costs.some(s=>!s.coverage_confirmed))blockers.push('COVERAGE_UNCONFIRMED');if(g.pending)blockers.push('ATTRIBUTION_WINDOW_OPEN');if(f.device&&f.device!=='all')blockers.push('SPEND_NOT_DEVICE_ALLOCATED');if(!qualified.size)blockers.push('NO_QUALIFIED_ACQUISITIONS');
   const amount=costs.reduce((n,s)=>n+Number(s.amount_micros),0);
-  return {...base,suppressed:false,measured_units:subjects.size,registrations:registrations.size,qualified_acquisitions:qualified.size,registration_rate:subjects.size?100*registrations.size/subjects.size:0,acquisition_rate:subjects.size?100*qualified.size/subjects.size:0,spend:costs.length?amount/1e6:null,cost_per_acquisition:blockers.length?null:amount/1e6/qualified.size,cost_blockers:blockers};
+  return {...base,suppressed:false,measured_units:subjects.size,goal:context.acquisition_goal??'registration_completed',goal_completions:goals.size,registrations:registrations.size,qualified_acquisitions:qualified.size,registration_rate:subjects.size?100*registrations.size/subjects.size:0,acquisition_rate:subjects.size?100*qualified.size/subjects.size:0,spend:costs.length?amount/1e6:null,cost_per_acquisition:blockers.length?null:amount/1e6/qualified.size,cost_blockers:blockers};
  });
  const scopedSpend=spend.filter(s=>(!f.page_key||s.page_key===f.page_key)&&(!f.campaign||s.campaign===f.campaign)&&['market','product','brand'].every(k=>!f[k]||s.context[k]===f[k]));
  return {from:dates.from,to:dates.to,data_source:source,rows,spend_rows:scopedSpend.map(s=>({...s,amount_micros:Number(s.amount_micros)})),measured_visits:rows.filter(r=>!r.suppressed).reduce((n,r)=>n+(r.visits??0),0),definition:'Backend-registered consented acquisition visits, separate from sampled heatmaps. Units are deduplicated within site/page/campaign/context. Page totals must not be summed as globally unique people. Outcomes are attributed to visit-entry dates; date boundaries are UTC; currencies are never combined. Cost requires reconciled complete daily spend, confirmed outcome coverage and closed attribution windows.'};

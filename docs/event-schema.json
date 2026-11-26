@@ -85,7 +85,7 @@
           "uniqueItems": true,
           "type": "array",
           "items": {
-            "pattern": "^auto\\.(header|nav|main|section|article|aside|footer|button|a)\\.[1-9][0-9]{0,2}$",
+            "pattern": "^auto\\.(header|nav|main|section|article|aside|footer|a|button|link|banner|offer|product_card|game_card|image|video|form|input|calculator|navigation|pricing|search|filter|custom)\\.[1-9][0-9]{0,2}$",
             "type": "string"
           }
         },

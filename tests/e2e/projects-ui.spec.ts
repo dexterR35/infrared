@@ -9,7 +9,7 @@ test.beforeEach(async({page})=>{
 });
 
 test('compact project cards and modal keyboard behavior',async({page})=>{
- const card=page.locator('.project-card');
+ const card=page.getByRole('region',{name:'My clothing store',exact:true});
  await expect(card).toHaveCount(1);
  expect((await card.boundingBox())!.width).toBeLessThan(500);
  const start=page.getByRole('button',{name:'Start new project'});

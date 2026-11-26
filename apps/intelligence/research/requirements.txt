@@ -1,0 +1,16 @@
+catboost==1.2.10
+econml==0.17.1
+fastapi==0.165.0
+mlflow-skinny==3.18.0
+optuna==5.1.0
+pillow==13.0.0
+polars==2.2.0
+pytesseract==0.3.13
+sentence-transformers==6.3.0
+torch==2.15.0
+transformers==5.24.1
+uvicorn==0.54.0
+rapidocr-onnxruntime==1.4.4
+redis==8.2.0
+sentencepiece==0.2.3
+vowpalwabbit==9.11.9

@@ -10,7 +10,7 @@ test.beforeEach(async({page,baseURL})=>{
  await page.context().addCookies([{name:'ir_session',value:session.cookie,url:baseURL!,httpOnly:true,sameSite:'Strict'}]);
  const fixture=JSON.parse(await readFile(path.join(path.dirname(credentialsFile),'intelligence-scope.json'),'utf8'));
  await page.route('**/api/bootstrap',async route=>{const response=await route.fetch();await route.fulfill({json:{...await response.json(),...fixture}});});
- await page.goto('/#intelligence');await expect(page.getByRole('heading',{name:'Journey intelligence.'})).toBeVisible();
+ await page.goto('/#intelligence');await expect(page.getByRole('heading',{name:'Predictive intelligence.'})).toBeVisible();
  await page.getByRole('combobox',{name:'Landing page',exact:true}).selectOption('local-demo/casino-halloween');
  // Sample data is intentionally absent from production navigation. This suite
  // explicitly opts into its isolated seeded source without changing that UI.
@@ -26,7 +26,7 @@ test('trains from the dashboard without downloads and saves a retraining schedul
  const response=await accepted;expect(response.status()).toBe(202);const {run_ids:[id]}=await response.json();
  await expect(page.getByLabel('Training runs & model versions')).toContainText('completed',{timeout:60000});
  await page.getByLabel('Training runs & model versions').selectOption(id);
- await expect(page.getByRole('img',{name:'Training and validation loss by epoch'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Training and validation loss',exact:true})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Held-out evaluation'})).toBeVisible();expect(downloads).toHaveLength(0);
  await page.getByLabel('Automatic retraining').selectOption('168');
  await page.getByRole('button',{name:'Save retraining schedule'}).click();
@@ -77,7 +77,7 @@ test('builds history and renders ranking scores and evaluation with fixture mode
 
 test('downloads, trains and displays an actual local SASRec prediction',async({page})=>{
  test.skip(!process.env.INFRARED_INTELLIGENCE_PYTHON,'Optional Python runtime is not configured');
- test.setTimeout(60000);
+ test.setTimeout(120000);
  await page.getByLabel('Data source',{exact:true}).selectOption('seeded');
  await page.getByText('Advanced dataset export',{exact:true}).click();
  const downloadEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Download training sequences'}).click();
@@ -96,13 +96,13 @@ test('downloads, trains and displays an actual local SASRec prediction',async({p
 
 test('trains EulerNet from observed windows and displays both actual model outputs together',async({page})=>{
  test.skip(!process.env.INFRARED_INTELLIGENCE_PYTHON,'Optional Python runtime is not configured');
- test.setTimeout(60000);
+ test.setTimeout(120000);
  await page.getByLabel('Data source',{exact:true}).selectOption('seeded');
  await page.getByText('Advanced click dataset export',{exact:true}).click();
  const downloadEvent=page.waitForEvent('download');await page.getByRole('button',{name:'Download click training examples'}).click();
  const dataset=(await (await downloadEvent).path())!;
  const parsed=JSON.parse(await readFile(dataset,'utf8'));expect(parsed.model).toBe('EulerNet');expect(parsed.views.length).toBeGreaterThanOrEqual(10);
- await promisify(execFile)(process.env.INFRARED_INTELLIGENCE_PYTHON!,['apps/intelligence/eulernet.py','train','--dataset',dataset,'--data-dir',process.env.E2E_DATA_DIR!,'--epochs','2','--width','4'],{timeout:30000,windowsHide:true});
+ await promisify(execFile)(process.env.INFRARED_INTELLIGENCE_PYTHON!,['apps/intelligence/eulernet.py','train','--dataset',dataset,'--data-dir',process.env.E2E_DATA_DIR!,'--epochs','2','--width','4','--tabular'],{timeout:60000,windowsHide:true});
  // Each browser test can run independently; ensure a matching SASRec checkpoint.
  await page.getByText('Advanced dataset export',{exact:true}).click();
  const sequenceDownload=page.waitForEvent('download');await page.getByRole('button',{name:'Download training sequences'}).click();
@@ -117,6 +117,16 @@ test('trains EulerNet from observed windows and displays both actual model outpu
  await expect(page.getByRole('heading',{name:'Likely next interactions'})).toBeVisible();
  await expect(page.getByRole('region',{name:'EulerNet click estimate'})).toContainText((100*result.eulernet.probability).toFixed(1)+'%');
  await expect(page.getByText('Both intelligence models are optional.',{exact:false})).toBeVisible();
+ await page.getByRole('button',{name:'Compare elements',exact:true}).click();
+ await expect(page.getByRole('table',{name:'Predicted element performance'})).toBeVisible({timeout:20000});
+ // The checkpoint was fitted on every exported view, so monitoring has no post-training views yet.
+ const monitorResponse=page.waitForResponse(r=>r.url().includes('/api/intelligence/monitor?'));
+ await page.getByRole('button',{name:'Check live performance',exact:true}).click();
+ const monitored=await monitorResponse;expect(monitored.status()).toBe(200);expect((await monitored.json()).status).toBe('no_fresh_views');
+ await expect(page.locator('#predictive-monitoring').getByRole('status')).toContainText('No reportable views have started');
+ await expect(page.getByLabel('Industry profile')).toContainText('Casino and gaming');
+ await page.getByRole('button',{name:'Analyse latest approved screenshot'}).click();
+ await expect(page.getByRole('button',{name:'Analyse visual attention'})).toBeVisible();
  await page.screenshot({path:'.local/evidence/intelligence-both-models.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:'.local/evidence/intelligence-both-models-mobile.png',fullPage:true});

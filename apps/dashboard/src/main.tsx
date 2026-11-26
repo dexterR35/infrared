@@ -73,17 +73,10 @@ import {
   TrackingPolicy,
 } from './analytics-panels.js';
 import {OperationsPanel} from './operations-panel.js';
-import {
-  MarketRegistry,
-  AcquisitionDashboard,
-  ExperimentsDashboard,
-  ScopeFilters,
-  scopePages,
-  type GrowthScope,
-} from './growth-dashboard.js';
+import {ScopeFilters, scopePages, type GrowthScope} from './growth-scope.js';
+import {MarketRegistry, AcquisitionDashboard, ExperimentsDashboard, IntelligencePanel} from './route-loader.js';
 import {SharedHeatmapComparison} from './comparison-heatmaps.js';
 import {InstallationCheckPanel} from './installation-status.js';
-import {IntelligencePanel} from './intelligence-panel.js';
 import {AudiencePanel} from './audience-panel.js';
 import './dark-workspace.css';
 type Page = {
@@ -481,7 +474,9 @@ function Studio() {
   const selectDevice = (next: string) => {
     const observed: number[] = report?.widths?.filter((w: number) => deviceForWidth(w) === next) ?? [];
     const defaultWidth = next === 'desktop' ? '1440' : next === 'mobile' ? '390' : '';
-    const nextWidth = observed.includes(Number(width)) ? width : String(observed[0] ?? defaultWidth);
+    // Keep an explicit width that already belongs to the chosen device, even while the report is still refreshing.
+    const keep = width !== '' && (observed.includes(Number(width)) || deviceForWidth(Number(width)) === next);
+    const nextWidth = keep ? width : String(observed[0] ?? defaultWidth);
     setAutoWidth(false);
     setReferenceId('');
     setDevice(next);
@@ -518,7 +513,7 @@ function Studio() {
   if (auth === 'login') return <Login onLogin={() => void reload()} />;
   const newTitles: Record<string, string> = {
     projects: 'Projects',
-    intelligence: 'Journey intelligence',
+    intelligence: 'Predictive intelligence',
     markets: 'Markets & registry',
     acquisition: 'Acquisition',
     experiments: 'Experiments',
@@ -530,7 +525,7 @@ function Studio() {
   };
   const descriptions: Record<string, string> = {
     projects: 'A separate analytics project for every website and brand.',
-    intelligence: 'Rank the next interaction from an observed sequence of actions.',
+    intelligence: 'Analyse design, exposure, conversion, and local model performance.',
     markets: 'Your markets, products and selected landing pages.',
     acquisition: 'Follow visits through conversions and qualified acquisition.',
     experiments: 'Test landing pages with randomized acquisition experiments.',

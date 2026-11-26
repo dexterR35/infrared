@@ -104,12 +104,19 @@ export function createTrainingService(db:DB){
    const page=await pageFor(run.scope,run.requested_by,tx);
    const checked=await status(tx,run.scope,page,run.model,source);
    if(checked.status!=='ready')throw new Problem(409,'INTELLIGENCE_TRAINED_MODEL_'+checked.status.toUpperCase());
+   // Keep a weak candidate available for review without displacing the current active version.
+   const manifest=checked.manifest;
+   const passes=manifest.model==='SASRec'
+    ?manifest.evaluation.sasrec.ndcg>Math.max(manifest.evaluation.markov.ndcg,manifest.evaluation.popularity.ndcg)
+    :manifest.validation_state==='passes_offline_checks'&&(!manifest.tabular||manifest.tabular.validation_state==='passes_offline_checks');
+   if(!restoring&&page.environment==='real'&&run.scope.data_source==='recorded'&&!passes)
+    return {...manifest,publication:'awaiting_review' as const};
    const dest=directory(run.scope,run.model);await mkdir(dest,{recursive:true,mode:0o700});
    // A single atomic pointer replacement activates the immutable pair. Failed
    // training/publication leaves the previous pointer and model intact.
    await writeFile(path.join(dest,'active.json.next'),JSON.stringify({run_id:run.id}),{mode:0o600});
    await rename(path.join(dest,'active.json.next'),path.join(dest,'active.json'));
-   return checked.manifest;
+   return {...manifest,publication:'activated' as const};
   });
  }
  async function execute(run:Run){
@@ -123,7 +130,7 @@ export function createTrainingService(db:DB){
    if(closing)throw new Problem(503,'INTELLIGENCE_TRAINING_INTERRUPTED');
    const points:TrainingPoint[]=[];let pending='',updates=Promise.resolve();
    await new Promise<void>((resolve,reject)=>{
-    child=execFile(config.intelligencePython,[fromRoot('apps/intelligence',run.model==='sasrec'?'sasrec.py':'eulernet.py'),'train','--dataset',datasetFile,'--output-dir',output,'--progress'],{timeout:30*60000,maxBuffer:1024*1024,windowsHide:true},(error,_stdout,stderr)=>{
+    child=execFile(config.intelligencePython,[fromRoot('apps/intelligence',run.model==='sasrec'?'sasrec.py':'eulernet.py'),'train','--dataset',datasetFile,'--output-dir',output,'--progress',...(run.model==='sasrec'?[]:['--tabular'])],{timeout:30*60000,maxBuffer:1024*1024,windowsHide:true},(error,_stdout,stderr)=>{
      child=undefined;if(error){Object.assign(error,{stderr});reject(error);}else resolve();
     });
     child.stdout?.on('data',(bytes:Buffer|string)=>{

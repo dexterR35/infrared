@@ -11,7 +11,7 @@ import type {IntelligenceDatasetQuery,ModelManifest} from '../packages/contracts
 import {config} from '../apps/server/config.js';
 import {createTrainingService} from '../apps/server/intelligence-training.js';
 import {exportSequences,modelDirectory,modelStatus,pruneIntelligence} from '../apps/server/intelligence.js';
-import {exportClickExamples,eulerStatus,predictClick} from '../apps/server/euler-intelligence.js';
+import {exportClickExamples,eulerStatus,predictClick,monitorModel} from '../apps/server/euler-intelligence.js';
 import {createManagement} from '../apps/server/management.js';
 import {digest} from '../apps/server/security.js';
 import {journeyGraph,elementPerformance} from '../apps/server/intelligence-insights.js';
@@ -134,6 +134,15 @@ it.skipIf(!process.env.INFRARED_INTELLIGENCE_PYTHON)('trains all objectives auto
  expect(result.probability).toBeGreaterThanOrEqual(0);expect(result.probability).toBeLessThanOrEqual(1);
  expect(result.target).toBe('qualified_exposure_primary_action_30s');
  expect(await readdir(path.join(temporary,'intelligence-training'))).toHaveLength(0);
+ // Monitoring scores only views that began after the newest training view.
+ expect((await monitorModel(db,scope,page,'click')).status).toBe('no_fresh_views');
+ await seedEulerViews(db,40,true,Date.now()-6*3600000);
+ const monitored=await monitorModel(db,scope,page,'click');
+ if(monitored.status!=='evaluated')throw new Error('MONITOR_NOT_EVALUATED:'+monitored.status);
+ expect(monitored.fresh_views).toBe(40);expect(monitored.objective).toBe('click');
+ expect(Object.keys(monitored.models)).toContain('eulernet');
+ expect(['healthy','watch','retrain']).toContain(monitored.recommendation);
+ expect((await monitorModel(db,scope,page,'conversion')).status).not.toBe('incompatible');
  const old=runs.find(r=>r.model==='sasrec');
  if(!old)throw new Error('SASREC_RUN_MISSING');
  await service.enqueue({...f,models:['sasrec']},'owner');await service.tick();

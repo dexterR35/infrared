@@ -1,5 +1,6 @@
 import {beforeAll,afterAll,it,expect} from 'vitest';
 import {randomUUID} from 'node:crypto';
+import {DEFAULT_TABLE_PAGE_SIZE} from '../packages/contracts/table-pagination.js';
 import {testDB} from './fixtures.js';
 import {createManagement} from '../apps/server/management.js';
 import {digest} from '../apps/server/security.js';
@@ -28,7 +29,7 @@ it('paginates beyond the old 100-row audit cap with stable tied ordering and exa
 it('filters literal search before counting and paging, without wildcard or SQL interpretation',async()=>{
  const percent=(await get('/api/tables/audit?search='+encodeURIComponent('%_'))).json();expect(percent.pagination.rowCount).toBe(1);expect(percent.rows[0].action).toBe('percent%_marker');
  const injection=(await get('/api/tables/audit?search='+encodeURIComponent("' OR 1=1 --"))).json();expect(injection.pagination.rowCount).toBe(0);expect(injection.rows).toEqual([]);
- const empty=(await get('/api/tables/audit?page=50&search=absent')).json();expect(empty.pagination).toEqual({pageIndex:0,pageSize:10,rowCount:0,pageCount:0});
+ const empty=(await get('/api/tables/audit?page=50&search=absent')).json();expect(empty.pagination).toEqual({pageIndex:0,pageSize:DEFAULT_TABLE_PAGE_SIZE,rowCount:0,pageCount:0});
 });
 it('keeps appended actions outside an existing paging snapshot until refresh',async()=>{
  // Exercise a known time boundary; two fast requests can share the same

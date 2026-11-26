@@ -1,3 +1,7 @@
+import {ElementIntelligence} from './element-intelligence.js';
+import {DesignIntelligence} from './design-intelligence.js';
+import {ModelMonitorCard} from './model-monitor.js';
+import {industryFor} from '../../../packages/domain/industry-profiles.js';
 import {Collapsible} from './components/collapsible.js';
 import {DataTable} from './data-table.js';
 import {Card} from './components/card.js';
@@ -6,11 +10,11 @@ import {Button} from './components/button.js';
 import {useCallback, useEffect, useState} from 'react';
 import type {ModelManifest} from '../../../packages/contracts/intelligence.js';
 import {exposureElement} from '../../../packages/domain/click-prediction.js';
-import {EulerSetup, EulerEvaluation, ClickResult, type EulerStatus, type ClickEstimate} from './click-intelligence.js';
+import {CatBoostEstimate, EulerSetup, EulerEvaluation, ClickResult, type EulerStatus, type ClickEstimate} from './click-intelligence.js';
 import {IntelligenceTraining, ObservedJourney} from './intelligence-training.js';
 import './intelligence.css';
 
-type Page = {site_id: string; page_key: string; name: string; revision: string; variant: string};
+type Page = {site_id: string; page_key: string; name: string; revision: string; variant: string; product?: string};
 type Status = {status: 'not_trained' | 'expired' | 'incompatible'} | {status: 'ready'; manifest: ModelManifest};
 const messages = {
   not_trained: 'No SASRec model has been trained for this page and data source.',
@@ -194,15 +198,29 @@ export function IntelligencePanel({
     );
   return (
     <div className="intelligence-layout">
+      {scope && dataSource !== 'legacy' && <nav className="intelligence-controls" aria-label="Intelligence sections">
+        {['Element','Conversion','Design','Experiment','Journey','Attention','Traffic','Monitoring','Model management'].map(label=><Button key={label} variant="secondary" onClick={()=>document.getElementById('predictive-'+label.toLowerCase().split(' ')[0])?.scrollIntoView({block:'start'})}>{label}</Button>)}
+      </nav>}
       <Card
         padding="normal"
         title={
           <>
-            Next-action intelligence <span className="badge">SASRec · Local</span>
+            Predictive models <span className="badge">Local CPU</span>
           </>
         }
       >
-        <p>Explore which registered interaction may follow an action sequence within one page view.</p>
+        <p>Compare models for element clicks and conversion, inspect held-out results, and explore paths through this page.</p>
+        {page && (() => {
+          const profile = industryFor(page.product);
+          return (
+            <p className="subtle" aria-label="Industry profile">
+              Industry profile · {profile.label} (from product label “{page.product ?? 'none'}”). Suggested goals:{' '}
+              {profile.goals.map((g) => g.replaceAll('_', ' ')).join(', ')}. Key element types: {profile.elements.join(', ').replaceAll('_', ' ')}.
+              {profile.regulated &&
+                ' Regulated sector: analysis stays on aggregate design, usability and randomized experiments, never individual targeting.'}
+            </p>
+          );
+        })()}
         <div className="intelligence-controls">
           <FormField
             category="select"
@@ -272,6 +290,7 @@ export function IntelligencePanel({
                 </p>
               </Collapsible>
             )}
+            {conversion?.status!=='ready' && <section id="predictive-conversion"><h3>Conversion intelligence</h3><p>Choose a primary action in the page policy and train the conversion model to estimate its probability after exposure.</p></section>}
             <EulerSetup
               status={euler}
               canExport={['owner', 'administrator'].includes(role) && !!page}
@@ -408,7 +427,7 @@ export function IntelligencePanel({
                 {click && <ClickResult result={click} />}
                 {conversion?.status === 'ready' && (
                   <div className="intelligence-setup">
-                    <h3>Conversion probability</h3>
+                    <h3 id="predictive-conversion">Conversion probability</h3>
                     <p>
                       Estimates the primary action <code>{conversion.manifest.primary_action_id}</code> within 30
                       seconds of first exposure, among fully observed windows. End the history with a first exposure
@@ -447,6 +466,7 @@ export function IntelligencePanel({
                         aria-label="Conversion probability estimate"
                         className="intelligence-click-result"
                       >
+                        <CatBoostEstimate result={conversionEstimate} />
                         <strong>{(100 * conversionEstimate.probability).toFixed(1)}%</strong>
                         <p>
                           Estimated probability of <code>{conversionEstimate.primary_action_id}</code> in the next 30
@@ -515,7 +535,20 @@ export function IntelligencePanel({
       )}
       {dataSource !== 'legacy' && euler?.status === 'ready' && <EulerEvaluation manifest={euler.manifest} />}
       {dataSource !== 'legacy' && conversion?.status === 'ready' && <EulerEvaluation manifest={conversion.manifest} />}
+      {scope && dataSource !== 'legacy' && <Card padding="normal" id="predictive-traffic" title="Traffic intelligence">
+        {euler?.status==='ready'&&euler.manifest.tabular?.population?.status==='evaluated'?<PopulationSummary population={euler.manifest.tabular.population}/>:<p>Train the click model on a period with sufficient fully observed exposures to compare traffic patterns.</p>}
+      </Card>}
+      {scope && dataSource !== 'legacy' && <ModelMonitorCard key={'monitor'+query+':'+(euler?.status==='ready'?euler.manifest.model_id:'')+':'+(conversion?.status==='ready'?conversion.manifest.model_id:'')} scope={scope} clickReady={euler?.status==='ready'} conversionReady={conversion?.status==='ready'} api={api}/>}
+      {scope && dataSource !== 'legacy' && <ElementIntelligence key={query+':'+(euler?.status==='ready'?euler.manifest.model_id:'')} scope={scope} validation={euler?.status==='ready'?euler.manifest.tabular?.validation_state:undefined} ready={euler?.status==='ready'&&euler.manifest.tabular?.status==='evaluated'} api={api}/>}
+      {scope && dataSource !== 'legacy' && <DesignIntelligence key={'design'+query} query={query} api={api} editable={['owner','administrator'].includes(role)} />}
       {scope && dataSource !== 'legacy' && <ObservedJourney key={query} scope={scope} from={from} to={to} api={api} />}
     </div>
   );
+}
+
+type Population = Extract<NonNullable<NonNullable<import('../../../packages/contracts/intelligence.js').EulerManifest['tabular']>['population']>,{status:'evaluated'}>;
+function PopulationSummary({population}:{population:Population}){
+ return <><p>Isolation Forest flagged {population.unusual_views??'a suppressed number of'} unusual views among {population.test_views} held-out views with eligible exposures. Duration and exposure counts alone cannot identify bots.</p>
+  <p>HDBSCAN cluster sizes across {population.cluster_sample} training views · {population.cluster_sizes.join(', ')||'No reportable clusters'}.</p>
+  <p>Training-to-test distribution distance (0–1) · {Object.entries(population.distribution_distance).map(([name,value])=>name.replaceAll('_',' ')+' '+value.toFixed(3)).join(' · ')}.</p></>;
 }

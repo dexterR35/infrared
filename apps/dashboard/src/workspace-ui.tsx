@@ -24,7 +24,7 @@ const primary = [
   {id: 'funnels', label: 'Funnels', accessible: 'Conversion funnels', icon: Target},
 ];
 const analysis = [
-  {id: 'intelligence', label: 'Journey intelligence', icon: Activity},
+  {id: 'intelligence', label: 'Predictive intelligence', icon: Activity},
   {id: 'acquisition', label: 'Acquisition', icon: Target},
   {id: 'experiments', label: 'Experiments', icon: Activity},
   {id: 'diagnostics', label: 'Diagnostics', icon: Activity},

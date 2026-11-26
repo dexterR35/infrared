@@ -68,3 +68,5 @@
 .project-privacy-text pre{white-space:pre-wrap}
 
 @media(max-width:600px){.project-heading{align-items:flex-start}.project-heading .project-start{width:100%;justify-content:center}.project-form-grid,.project-region-grid{grid-template-columns:1fr}.project-field-wide{grid-column:auto}.project-create{padding:20px}.project-form-actions{flex-direction:row;align-items:center}.project-form-actions>.btn{flex:1}.project-form-section>span:last-child:not(.project-section-number){margin-left:0;width:100%;padding-left:22px}}
+
+.project-stack .ui-card-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }

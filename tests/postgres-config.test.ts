@@ -26,6 +26,6 @@ it('keeps application migrations isolated from existing public tables',async()=>
   await migrate(db);
   expect((await db.query('SELECT * FROM public.users'))[0].legacy).toBe('preserved');
   expect((await db.query('SELECT count(*)::int AS n FROM infrared.users'))[0].n).toBe(0);
-  expect((await db.query('SELECT max(version) AS version FROM schema_migrations'))[0].version).toBe(15);
+  expect((await db.query('SELECT max(version) AS version FROM schema_migrations'))[0].version).toBe(17);
  }finally{await db.close();}
 });

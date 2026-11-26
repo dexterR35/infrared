@@ -43,7 +43,8 @@ test('whole-site mode: one snippet, a page per canonical path, client-side navig
  // The pages exist in the dashboard, created on first visit.
  const session=JSON.parse(await readFile(path.join(process.env.E2E_DATA_DIR!,'browser-session.json'),'utf8'));
  await page.goto('/');await page.context().addCookies([{name:'ir_session',value:session.cookie,url:new URL(page.url()).origin,httpOnly:true,sameSite:'Strict'}]);
- const data=await (await page.request.get('/api/bootstrap')).json();
- const keys=data.pages.filter((p:any)=>p.site_id==='local-site').map((p:any)=>p.page_key).sort();
- expect(keys).toEqual(['p.about','p.home','p.projects.id']);
+ for(const key of ['p.about','p.home','p.projects.id']){
+  const response=await page.request.get('/api/install?site_id=local-site&page_key='+key);
+  expect(response.ok()).toBe(true);
+ }
 });

@@ -112,12 +112,12 @@ export async function modelStatus(db:DB,f:IntelligenceScope,page:any,directory?:
  return {status:'ready',manifest};
 }
 let inferenceBusy=false;
-export async function runIntelligence(script:'sasrec.py'|'eulernet.py',directory:string,input:object) {
+export async function runIntelligence(script:'sasrec.py'|'eulernet.py',directory:string,input:object,command:'predict'|'monitor'='predict',timeout=15000) {
  if(inferenceBusy)throw new Problem(429,'INTELLIGENCE_BUSY');
  inferenceBusy=true;
  try{
   return await new Promise<string>((resolve,reject)=>{
-   const child=execFile(config.intelligencePython,[fromRoot('apps/intelligence',script),'predict','--model-dir',directory],{timeout:15000,maxBuffer:65536,windowsHide:true},(error,stdout)=>error?reject(error):resolve(stdout));
+   const child=execFile(config.intelligencePython,[fromRoot('apps/intelligence',script),command,'--model-dir',directory],{timeout,maxBuffer:65536,windowsHide:true},(error,stdout)=>error?reject(error):resolve(stdout));
    child.stdin?.on('error',()=>{});child.stdin?.end(JSON.stringify(input));
   });
  }catch{throw new Problem(503,'INTELLIGENCE_INFERENCE_UNAVAILABLE');}finally{inferenceBusy=false;}

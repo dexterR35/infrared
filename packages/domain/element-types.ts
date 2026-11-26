@@ -1,0 +1,1 @@
+export const semanticElementTypes = ['button','link','banner','offer','product_card','game_card','image','video','form','input','calculator','navigation','pricing','search','filter','custom'] as const;

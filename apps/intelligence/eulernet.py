@@ -207,6 +207,9 @@ def train(args):
     minimum = data["minimum_views"]
     if min(len(training), len(validation), len(test)) < minimum:
         raise ValueError("Each chronological partition must meet the minimum view cohort")
+    for partition in (training,validation,test):
+        if min(sum(any(e["label"]==label for e in view["examples"]) for view in partition) for label in (0,1))<minimum:
+            raise ValueError("Each partition requires positive and negative support across distinct views")
     vocabulary = vocabulary_from_views(training, minimum)
     if any(not vocabulary[field] for field in FEATURES):
         raise ValueError("Insufficient distinct-view training support for a feature")
@@ -234,21 +237,44 @@ def train(args):
     evaluation = dict(test_views=len(test), test_examples=len(labels), positives=int(ty.sum()), negatives=int(len(ty) - ty.sum()),
                       eulernet=binary_metrics(labels, p), logistic=binary_metrics(labels, lp),
                       constant=binary_metrics(labels, [float(y.mean())] * len(labels)))
+    tabular, blob, ranker_blob = None, None, None
+    if getattr(args, "tabular", False):
+        from population import population_report
+        from tabular import benchmark, ranking_benchmark
+        tabular, blob = benchmark(x, tx, y, labels, FEATURES, args.seed, binary_metrics, training, test, minimum)
+        tabular["ranker"], ranker_blob = ranking_benchmark(x, y, tx, ty, training, test, minimum, args.seed)
+        if getattr(args, "deepfm", False):
+            from deepfm import DeepFM
+            deep = optimize(DeepFM(settings["sizes"]), x, y, vx, vy, args.epochs)
+            with torch.inference_mode():
+                tabular["deepfm"] = binary_metrics(labels, torch.sigmoid(deep(tx)).tolist())
+        if getattr(args, "din", False):
+            from din import evaluate
+            tabular["din"] = evaluate(x,y,vx,vy,tx,ty,training,validation,test,vocabulary,FEATURES,args.epochs,binary_metrics,minimum)
+        tabular["population"] = population_report(training, test, minimum, args.seed)
     checked = evaluation["eulernet"]["log_loss"] < min(evaluation[k]["log_loss"] for k in ("logistic", "constant")) and evaluation["eulernet"]["ece"] <= 0.1
     state = "fixture_only" if data["scope"]["data_source"] == "seeded" or data["environment"] == "synthetic" else "passes_offline_checks" if checked else "needs_review"
+    if tabular and tabular.get("status") == "evaluated":
+        metrics = tabular["metrics"]["CatBoost"]
+        passes = metrics["log_loss"] < min(evaluation[k]["log_loss"] for k in ("logistic","constant")) and metrics["ece"] <= 0.1
+        tabular["validation_state"] = "fixture_only" if state == "fixture_only" else "passes_offline_checks" if passes else "needs_review"
+    from monitoring import reference_profile
+    allowed = tabular.get("context_allowed") if tabular and tabular.get("status") == "evaluated" else None
+    reference = reference_profile(training, vocabulary, FEATURES, allowed)
     model_id = str(uuid.uuid4())
     manifest = dict(schema_version=1, model="EulerNet", model_id=model_id, scope=data["scope"], environment=data["environment"],
                     created_at=datetime.now(timezone.utc).isoformat(), expires_at=data["expires_at"],
-                    oldest_started_at=min(v["started_at"] for v in data["views"]), minimum_views=minimum,
+                    oldest_started_at=min(v["started_at"] for v in data["views"]),
+                    newest_started_at=max((v["started_at"] for v in data["views"]), key=timestamp), minimum_views=minimum, reference=reference,
                     feature_schema_version=1, target=data["target"], primary_action_id=data.get("primary_action_id"), horizon_ms=30000, vocabulary=vocabulary,
-                    evaluation=evaluation, validation_state=state,
+                    evaluation=evaluation, validation_state=state, tabular=tabular,
                     training=dict(views=len(training), validation_views=len(validation), seed=args.seed, epochs=args.epochs,
                                   split="chronological whole-view 70/15/15 with overlap purge", calibration="validation-only monotone Platt scaling", history=history))
     directory = Path(args.output_dir) if getattr(args, "output_dir", None) else Path(args.data_dir) / "intelligence" / model_key(data["scope"], data["target"])
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     weights_tmp, manifest_tmp = directory / (model_id + ".pt.tmp"), directory / (model_id + ".json.tmp")
     with os.fdopen(os.open(weights_tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as output:
-        torch.save(dict(model_id=model_id, settings=settings, state_dict=model.state_dict(), calibration=calibration), output)
+        torch.save(dict(model_id=model_id, settings=settings, state_dict=model.state_dict(), calibration=calibration, catboost=blob, ranker=ranker_blob), output)
     with os.fdopen(os.open(manifest_tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w", encoding="utf-8") as output:
         output.write(json.dumps(manifest, allow_nan=False, indent=2))
     os.replace(weights_tmp, directory / "model.pt")
@@ -265,19 +291,83 @@ def predict(args):
     request = json.load(sys.stdin)
     if timestamp(manifest["expires_at"]) <= datetime.now(timezone.utc).timestamp() or request["model_id"] != manifest["model_id"]:
         raise ValueError("Expired or changed model")
-    features = request["features"]
-    if set(features) != set(FEATURES) or features["element_id"] not in manifest["vocabulary"]["element_id"]:
-        raise ValueError("Unknown exposure element")
     checkpoint = torch.load(directory / "model.pt", map_location="cpu", weights_only=True)
     if checkpoint["model_id"] != manifest["model_id"]:
         raise ValueError("Model publication in progress")
+    report=manifest.get("tabular") or {}
+    def scenario(row):
+        return {**report.get("scenario_defaults",{}),**report.get("element_defaults",{}).get(row["element_id"],{})}
+    if "candidates" in request:
+        candidates=request["candidates"]
+        if not checkpoint.get("catboost") or not 1<=len(candidates)<=200:
+            raise ValueError("No compatible element model or candidates")
+        if any(set(row)!=set(FEATURES) or row["element_id"] not in manifest["vocabulary"]["element_id"] for row in candidates):
+            raise ValueError("Unknown exposure element")
+        from tabular import candidate_scores
+        scores=candidate_scores(checkpoint["catboost"],checkpoint.get("ranker"),
+                                [encode(row,manifest["vocabulary"]) for row in candidates],[scenario(row).values() for row in candidates])
+        print(json.dumps(dict(model_id=manifest["model_id"],elements=[
+            dict(element_id=row["element_id"],probability=p,ranking_score=score)
+            for row,(p,score) in zip(candidates,scores)]),allow_nan=False))
+        return
+    features = request["features"]
+    if set(features) != set(FEATURES) or features["element_id"] not in manifest["vocabulary"]["element_id"]:
+        raise ValueError("Unknown exposure element")
     model = EulerNet(**checkpoint["settings"])
     model.load_state_dict(checkpoint["state_dict"])
     model.eval()
     scale, bias = checkpoint["calibration"]["scale"], checkpoint["calibration"]["bias"]
     probability = float(torch.sigmoid(model(torch.tensor([encode(features, manifest["vocabulary"])])) * scale + bias)[0])
     unknown = [field for field in FEATURES if features[field] not in manifest["vocabulary"][field]]
-    print(json.dumps(dict(model_id=manifest["model_id"], element_id=features["element_id"], probability=probability, unseen_context=unknown), allow_nan=False))
+    tabular = None
+    if checkpoint.get("catboost"):
+        from tabular import estimate
+        defaults=scenario(features)
+        tabular = estimate(checkpoint["catboost"], encode(features, manifest["vocabulary"])+list(defaults.values()), FEATURES+tuple(defaults))
+        tabular["scenario_defaults"]=defaults
+        tabular["validation_state"]=manifest["tabular"].get("validation_state","needs_review")
+    print(json.dumps(dict(model_id=manifest["model_id"], catboost=tabular, element_id=features["element_id"], probability=probability, unseen_context=unknown), allow_nan=False))
+
+
+@torch.inference_mode()
+def monitor(args):
+    """Evaluate the published model on views that began after its newest training view."""
+    from monitoring import build_report
+    directory = Path(args.model_dir)
+    manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+    request = json.load(sys.stdin)
+    data = request["dataset"]
+    if request["model_id"] != manifest["model_id"] or data["target"] != manifest["target"]:
+        raise ValueError("Changed model or target")
+    if any(data["scope"].get(k) != manifest["scope"].get(k) for k in ("site_id", "page_key", "data_source", "revision", "variant", "registry_hash")):
+        raise ValueError("Monitoring data belongs to a different scope")
+    checkpoint = torch.load(directory / "model.pt", map_location="cpu", weights_only=True)
+    if checkpoint["model_id"] != manifest["model_id"]:
+        raise ValueError("Model publication in progress")
+    cutoff = manifest.get("newest_started_at") or manifest["created_at"]
+    fresh = [v for v in data["views"] if timestamp(v["started_at"]) > timestamp(cutoff)]
+    vocabulary = manifest["vocabulary"]
+    pairs = [(index, e) for index, v in enumerate(fresh) for e in v["examples"] if e["features"]["element_id"] in vocabulary["element_id"]]
+    supported = [e for _, e in pairs]
+    unseen = sum(len(v["examples"]) for v in fresh) - len(supported)
+    scored = dict(cutoff=cutoff, unseen=unseen, labels=[e["label"] for e in supported], groups=[i for i, _ in pairs], models={})
+    if supported:
+        ids = [encode(e["features"], vocabulary) for e in supported]
+        model = EulerNet(**checkpoint["settings"])
+        model.load_state_dict(checkpoint["state_dict"])
+        model.eval()
+        scale, bias = checkpoint["calibration"]["scale"], checkpoint["calibration"]["bias"]
+        scored["models"]["eulernet"] = torch.sigmoid(model(torch.tensor(ids)) * scale + bias).tolist()
+        tabular = manifest.get("tabular") or {}
+        if checkpoint.get("catboost") and tabular.get("status") == "evaluated":
+            from tabular import CONTEXT_FIELDS, score_rows
+            allowed = tabular.get("context_allowed")
+            contexts = [[e.get("context", {}).get(f, "unknown") for f in CONTEXT_FIELDS] for e in supported]
+            if allowed is None:
+                # Older checkpoints did not record context support. Fall back to CatBoost's own unseen-category handling.
+                allowed = {f: {row[i] for row in contexts} for i, f in enumerate(CONTEXT_FIELDS)}
+            scored["models"]["catboost"] = score_rows(checkpoint["catboost"], ids, contexts, allowed)
+    print(json.dumps(build_report(manifest, fresh, scored, binary_metrics), allow_nan=False))
 
 
 def main():
@@ -290,14 +380,23 @@ def main():
     training.add_argument("--width", type=int, default=8)
     training.add_argument("--seed", type=int, default=2026)
     training.add_argument("--output-dir")
+    training.add_argument("--din", action="store_true", help="Benchmark within-view DIN on retained prior elements")
+    training.add_argument("--deepfm", action="store_true", help="Benchmark DeepFM alongside tabular models")
+    training.add_argument("--tabular", action="store_true")
     training.add_argument("--progress", action="store_true")
     prediction = commands.add_parser("predict")
     prediction.add_argument("--model-dir", required=True)
+    monitoring = commands.add_parser("monitor")
+    monitoring.add_argument("--model-dir", required=True)
     args = parser.parse_args()
     if args.command == "train":
         if not 1 <= args.epochs <= 1000 or not 2 <= args.width <= 64:
             parser.error("Invalid training hyperparameters")
+        if args.deepfm or args.din:
+            args.tabular = True
         train(args)
+    elif args.command == "monitor":
+        monitor(args)
     else:
         predict(args)
 

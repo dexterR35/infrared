@@ -41,7 +41,7 @@ export async function migrate(db:DB) {
     const schema=databaseSchema(db.schema);
     await db.exec('CREATE SCHEMA IF NOT EXISTS "'+schema+'"; REVOKE ALL ON SCHEMA "'+schema+'" FROM PUBLIC');
   }
-  for (const file of ['001_initial.sql','002_capture_and_facts.sql','003_data_sources.sql','004_analytics_operations.sql','005_acquisition_experiments.sql','006_installation_checks.sql','007_neutral_brand.sql','008_audience.sql','009_site_approval.sql','010_whole_site.sql','011_journeys.sql','012_intelligence.sql','013_website_projects.sql','014_project_markets.sql','015_intelligence_training.sql']) {
+  for (const file of ['001_initial.sql','002_capture_and_facts.sql','003_data_sources.sql','004_analytics_operations.sql','005_acquisition_experiments.sql','006_installation_checks.sql','007_neutral_brand.sql','008_audience.sql','009_site_approval.sql','010_whole_site.sql','011_journeys.sql','012_intelligence.sql','013_website_projects.sql','014_project_markets.sql','015_intelligence_training.sql','016_business_goals.sql','017_adaptive_experiments.sql']) {
     await db.exec(await readFile(fileURLToPath(new URL(file,import.meta.url)),'utf8'));
   }
 }

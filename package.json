@@ -11,6 +11,7 @@
     "dev": "tsx scripts/dev.ts",
     "start": "tsx apps/server/main.ts",
     "build": "tsx scripts/build.ts",
+    "build:archive": "npm run build && python scripts/archive-build.py",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --configLoader native --pool threads",
     "test:contracts": "vitest run --configLoader native --pool threads tests/contracts.test.ts",

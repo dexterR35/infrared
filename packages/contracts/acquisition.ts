@@ -1,12 +1,13 @@
+import {businessGoals} from '../domain/business-goals.js';
 import {Type as T,type Static} from '@sinclair/typebox';
 const obj=<P extends import('@sinclair/typebox').TProperties>(p:P)=>T.Object(p,{additionalProperties:false});
 export const growthCode=T.String({pattern:'^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,63}$',maxLength:64});
 const uuid=T.String({format:'uuid'}),name=T.String({minLength:1,maxLength:120,pattern:'^[^\\u0000-\\u001f\\u007f]+$'});
-export const goalSchema=T.Union([T.Literal('registration_completed'),T.Literal('qualified_acquisition')]);
+export const goalSchema=T.String({maxLength:64,pattern:'^('+businessGoals.join('|')+'|custom[.][a-z][a-z0-9_]{0,55})$'});
 export const registryRowSchema=obj({name,page_key:growthCode,url:T.String({minLength:8,maxLength:2048}),market:growthCode,product:growthCode,brand:growthCode,locale:growthCode,currency:T.String({pattern:'^[A-Z]{3}$'}),report_timezone:T.String({minLength:1,maxLength:64}),page_family:growthCode,acquisition_goal:goalSchema,other_query_policy:T.Optional(T.Union([T.Literal('reject'),T.Literal('ignore')]))});
 export const registryImportSchema=obj({site_id:T.Optional(growthCode),dry_run:T.Boolean(),rows:T.Array(registryRowSchema,{minItems:1,maxItems:100})});
 export type RegistryRow=Static<typeof registryRowSchema>;
-export const experimentSchema=obj({site_id:growthCode,page_key:growthCode,name,kind:T.Union([T.Literal('aa'),T.Literal('ab')]),primary_metric:goalSchema,control_variant:growthCode,treatment_variant:growthCode,baseline_rate:T.Number({exclusiveMinimum:0,exclusiveMaximum:1}),mde_relative:T.Number({exclusiveMinimum:0,maximum:1}),minimum_days:T.Integer({minimum:1,maximum:90}),attribution_hours:T.Integer({minimum:1,maximum:720})});
+export const experimentSchema=obj({site_id:growthCode,page_key:growthCode,name,kind:T.Union([T.Literal('aa'),T.Literal('ab'),T.Literal('adaptive')]),primary_metric:goalSchema,control_variant:growthCode,treatment_variant:growthCode,baseline_rate:T.Number({exclusiveMinimum:0,exclusiveMaximum:1}),mde_relative:T.Number({exclusiveMinimum:0,maximum:1}),minimum_days:T.Integer({minimum:1,maximum:90}),attribution_hours:T.Integer({minimum:1,maximum:720})});
 export type ExperimentInput=Static<typeof experimentSchema>;
 export const experimentStateSchema=obj({status:T.Union([T.Literal('running'),T.Literal('paused'),T.Literal('completed')])});
 const visitFields={receipt_id:uuid,page_key:growthCode,unit_token:T.String({pattern:'^[A-Za-z0-9_-]{32,128}$'}),campaign:growthCode,device:T.Union([T.Literal('desktop'),T.Literal('tablet'),T.Literal('mobile')]),analytics_consent:T.Literal(true),public_context:T.Literal(true),policy_version:growthCode};

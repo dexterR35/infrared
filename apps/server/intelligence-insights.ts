@@ -27,9 +27,10 @@ export function elementPerformance(dataset:EulerDataset){
   row.views++;row.clicked+=example.label;elements.set(id,row);
  }
  const rows=[...elements.values()].filter(e=>e.views>=dataset.minimum_views&&(dataset.environment==='synthetic'||(e.clicked>=dataset.minimum_views&&e.views-e.clicked>=dataset.minimum_views)));
+ const totalViews=rows.reduce((n,e)=>n+e.views,0),totalClicks=rows.reduce((n,e)=>n+e.clicked,0);
  return rows.map(row=>{
   // Suppressed peers cannot leak through the comparison rate.
-  const peers=rows.filter(e=>e!==row),n=peers.reduce((n,e)=>n+e.views,0),positive=peers.reduce((n,e)=>n+e.clicked,0);
+  const n=totalViews-row.views,positive=totalClicks-row.clicked;
   const interval=wilson(row.clicked,row.views),flag=n>=dataset.minimum_views&&interval.high<wilson(positive,n).low;
   return {...row,rate:row.clicked/row.views,interval,flag,reason:flag?'Click rate interval is below the pooled peer interval. Investigate placement and relevance.':null};
  }).sort((a,b)=>Number(b.flag)-Number(a.flag)||a.rate-b.rate);

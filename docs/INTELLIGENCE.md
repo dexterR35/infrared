@@ -1,6 +1,9 @@
 # Local SASRec and EulerNet intelligence
 
-Infrared trains SASRec on registered interactions within a single consented page view and ranks the next interaction from a supplied history. EulerNet supports separate click and primary-action conversion objectives over a defined observed window. Open **Analysis → Journey intelligence** to train models directly from the database, schedule retraining, inspect progress and evaluations, explore journeys, and restore a saved version. Ordinary analytics does not require Python or trained models.
+See the [predictive intelligence build record](PREDICTIVE-BUILD-2026-11-26.md) for model comparisons, semantic tracking, optional local runtimes, adaptive experiments and release instructions.
+
+
+Infrared trains SASRec on registered interactions within a single consented page view and ranks the next interaction from a supplied history. EulerNet supports separate click and primary-action conversion objectives over a defined observed window. Open **Analysis → Predictive intelligence** to train models directly from the database, schedule retraining, inspect progress and evaluations, explore journeys, and restore a saved version. Ordinary analytics does not require Python or trained models.
 
 ## Automatic training
 
@@ -51,7 +54,7 @@ Python/PyTorch must be installed separately. Both models are optional native wor
 
 ## Advanced manual export and training
 
-1. Sign in as an owner or administrator. In Journey intelligence, select a page, **Recorded activity** or **Generated samples**, and export dates (inclusive UTC calendar dates).
+1. Sign in as an owner or administrator. In Predictive intelligence, select a page, **Recorded activity** or **Generated samples**, and export dates (inclusive UTC calendar dates).
 2. Choose **Download training sequences**. This creates a private JSON dataset containing registered action tokens and sequence start/end timestamps. It excludes view IDs, session IDs, unit identifiers, URLs, form contents, coordinates, and demographic/source attributes. Each sequence belongs to one page view. The export is audited and rate limited.
 3. Train from the repository root, using the interpreter installed above:
 

@@ -22,7 +22,15 @@ try{for(const campaign of requestedCampaign?[requestedCampaign]:['halloween','ch
  if(host.hmPageKey!=='casino-'+campaign||host.hmRevision!=='demo-v1'||host.hmLocale!=='en-GB'||host.hmVariant!=='control'||host.hmState!=='public-default')throw new Error('CAPTURE_CONTEXT_MISMATCH');
  await page.evaluate(({variant,treatment})=>{document.documentElement.dataset.hmVariant=variant;if(treatment){const button=document.querySelector<HTMLElement>('[data-hm-id="hero-register"]')!;button.textContent='Explore your seasonal offer →';button.style.background='#a7f3d0';}},{variant,treatment});
  await page.locator('#consent').evaluate(el=>(el as HTMLElement).style.display='none');await page.locator('#withdraw').evaluate(el=>(el as HTMLElement).style.display='none');
- const geometry=await page.evaluate(()=>({document:{width:document.documentElement.scrollWidth,height:document.documentElement.scrollHeight},elements:[...document.querySelectorAll('[data-hm-id]')].map(el=>{const r=el.getBoundingClientRect();return {id:el.getAttribute('data-hm-id')!,rect:{x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height},layer:'document'};}),masks:[...document.querySelectorAll('[data-hm-private]')].map(el=>{const r=el.getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height};}).filter(r=>r.width>0&&r.height>0)}));
+ const geometry=await page.evaluate(()=>({document:{width:document.documentElement.scrollWidth,height:document.documentElement.scrollHeight},elements:[...document.querySelectorAll('[data-hm-id]')].map(el=>{const r=el.getBoundingClientRect(),style=getComputedStyle(el);
+  const [fg,bg]=[style.color,style.backgroundColor].map(value=>{
+   const match=/^rgb\((\d+), (\d+), (\d+)\)$/.exec(value);
+   if(!match)return null;
+   const rgb=match.slice(1).map(v=>{const s=Number(v)/255;return s<=.04045?s/12.92:((s+.055)/1.055)**2.4;});
+   return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];
+  });
+  const contrast=fg!==null&&bg!==null&&style.backgroundImage==='none'? (Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05):undefined;
+  return {id:el.getAttribute('data-hm-id')!,font_px:parseFloat(style.fontSize),solid_color_contrast:contrast,rect:{x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height},layer:'document'};}),masks:[...document.querySelectorAll('[data-hm-private]')].map(el=>{const r=el.getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height};}).filter(r=>r.width>0&&r.height>0)}));
  if(geometry.document.width!==width||geometry.document.height>20000||geometry.document.width*geometry.document.height>40000000)throw new Error('CAPTURE_GEOMETRY_LIMIT');
  const base=`${campaign}-${width}`;await page.screenshot({path:path.join(output,base+'.png'),fullPage:true,mask:[page.locator('[data-hm-private]')],maskColor:'#252731'});
  await writeFile(path.join(output,base+'.json'),JSON.stringify({schema_version:1,site_id:'local-demo',page_key:'casino-'+campaign,revision:'demo-v1',locale:'en-GB',variant,state:'public-default',captured_at:new Date().toISOString(),viewport:{width,height,dpr:1},...geometry,layer:'document',capture_policy_version:'local-fixture-v1'},null,2));await context.close();captured++;

@@ -1,0 +1,1 @@
+export const businessGoals = ['registration_completed', 'qualified_acquisition', 'purchase', 'loan_application', 'registration', 'add_to_cart', 'booking_completed', 'subscription', 'lead_generated', 'quote_requested', 'download_completed', 'trial_started', 'enrolment', 'appointment_booked', 'custom_conversion'] as const;

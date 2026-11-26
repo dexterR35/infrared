@@ -1,3 +1,4 @@
+import {localResearch} from './local-research.js';
 import {accessibleSiteIds,type WorkspaceUser} from './access.js';
 import {randomUUID} from 'node:crypto';
 import type {FastifyInstance,FastifyRequest} from 'fastify';
@@ -28,6 +29,12 @@ export function registerGrowthManagement(app:FastifyInstance,db:DB,access:Access
  app.post<{Body:ExperimentInput}>('/api/experiments',{schema:{body:experimentSchema}},async req=>{const u=access.user(req);access.canEdit(u);await access.siteAccess(u,req.body.site_id);const result=await createExperiment(db,req.body);await audit(db,u.id,'experiment_created',req.body.site_id,{experiment_id:result.id});return result;});
  app.post<{Params:{id:string};Body:{status:'running'|'paused'|'completed'}}>('/api/experiments/:id/state',{schema:{params:idParams,body:experimentStateSchema}},async req=>{const{u,e}=await experimentAccess(req,req.params.id,true);const result=await changeExperimentState(db,e.id,req.body.status);await audit(db,u.id,'experiment_state_updated',e.site_id,{experiment_id:e.id,status:result.status});return result;});
  app.get<{Params:{id:string};Querystring:{data_source?:'recorded'|'seeded'}}>('/api/experiments/:id/readout',{schema:{params:idParams,querystring:sourceQuery}},async req=>{await experimentAccess(req,req.params.id);return experimentReadout(db,req.params.id,req.query.data_source);});
+ app.post<{Params:{id:string};Body:{data_source?:'recorded'|'seeded'}}>('/api/experiments/:id/causal',{schema:{params:idParams,body:sourceQuery}},async req=>{
+  await experimentAccess(req,req.params.id,true);limiter.check('causal:'+access.user(req).id,4,60000);
+  const readout=await experimentReadout(db,req.params.id,req.body.data_source);
+  if(readout.suppressed||readout.blockers?.length||readout.pending!==0||readout.experiment.kind!=='ab'||readout.experiment.status!=='completed')throw new Problem(422,'INTELLIGENCE_VALID_RANDOMIZED_READOUT_REQUIRED');
+  return localResearch('experiment',Buffer.from(JSON.stringify(readout)));
+ });
  app.post<{Params:{id:string}}>('/api/experiments/:id/freeze',{schema:{params:idParams,body:empty}},async req=>{const{u,e}=await experimentAccess(req,req.params.id,true);const result=await freezeExperimentReadout(db,e.id);await audit(db,u.id,'experiment_readout_frozen',e.site_id,{experiment_id:e.id});return result;});
  app.post<{Params:{id:string};Body:{count:number}}>('/api/experiments/:id/sample',{schema:{params:idParams,body:T.Object({count:T.Integer({minimum:2,maximum:200})},{additionalProperties:false})}},async req=>{
   const{u,e}=await experimentAccess(req,req.params.id,true);limiter.check('sample:'+u.id,4,600000);const[site]=await db.query('SELECT environment FROM sites WHERE id=$1',[e.site_id]);if(site.environment!=='synthetic')throw new Problem(403,'SYNTHETIC_SITE_REQUIRED');if(e.status!=='running')throw new Problem(409,'EXPERIMENT_NOT_RUNNING');
@@ -39,6 +46,7 @@ export function registerGrowthManagement(app:FastifyInstance,db:DB,access:Access
    const probability=parseInt(digest('sample-outcome|'+unit).slice(0,8),16)/0x100000000;
    if(probability<.3)await recordAcquisitionOutcome(db,e.site_id,{visit_id:v.visit_id,event_id:randomUUID(),kind:'registration_completed',occurred_at:new Date(Date.parse(time)+60000).toISOString()});
    const rate=e.kind==='aa'?.12:v.variant===e.control_variant?.12:.18;
+   if(probability<rate&&!['qualified_acquisition','registration_completed'].includes(e.primary_metric))await recordAcquisitionOutcome(db,e.site_id,{visit_id:v.visit_id,event_id:randomUUID(),kind:e.primary_metric,occurred_at:new Date(Date.parse(time)+120000).toISOString()});
    if(probability<rate)await recordAcquisitionOutcome(db,e.site_id,{visit_id:v.visit_id,event_id:randomUUID(),kind:'qualified_acquisition',occurred_at:new Date(Date.parse(time)+120000).toISOString()});
   }
   await audit(db,u.id,'experiment_sample_generated',e.site_id,{experiment_id:e.id,count:req.body.count,data_source:'seeded'});return {ok:true,data_source:'seeded',message:'Generated historical examples only. Recorded results are unchanged.'};
