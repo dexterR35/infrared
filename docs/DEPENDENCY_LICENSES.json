@@ -11,7 +11,7 @@
   },
   {
     "name": "@fastify/static",
-    "version": "10.1.6",
+    "version": "10.1.12",
     "license": "MIT"
   },
   {

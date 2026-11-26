@@ -36,7 +36,7 @@ export const eventSchema = T.Union([
   obj({...base,type:T.Literal('engagement'),active_ms:ms,idle_ms:ms,first_interaction_ms:T.Optional(ms)}),
   obj({...base,type:T.Literal('delivery'),retry_attempts:T.Integer({minimum:0,maximum:20000}),dropped_events:T.Integer({minimum:0,maximum:20000}),transport_failures:T.Integer({minimum:0,maximum:20000})}),
 ]);
-export const contextSchema = obj({page_key:code,revision:code,locale:code,variant:code,state:code,campaign:code,acquisition_id:T.Optional(uuid),session_id:T.Optional(uuid),session_seq:T.Optional(T.Integer({minimum:1,maximum:1000})),page_path:T.Optional(T.String({pattern:'^/[a-zA-Z0-9._~:*/-]{0,1023}$',maxLength:1024}))});
+export const contextSchema = obj({auto_elements:T.Optional(T.Array(T.String({pattern:'^auto\\.(header|nav|main|section|article|aside|footer|button|a)\\.[1-9][0-9]{0,2}$'}),{maxItems:100,uniqueItems:true})),page_key:code,revision:code,locale:code,variant:code,state:code,campaign:code,acquisition_id:T.Optional(uuid),session_id:T.Optional(uuid),session_seq:T.Optional(T.Integer({minimum:1,maximum:1000})),page_path:T.Optional(T.String({pattern:'^/[a-zA-Z0-9._~:*/-]{0,1023}$',maxLength:1024}))});
 export const batchSchema = obj({schema_version:T.Literal(1),sdk_version:T.String({maxLength:32}),site_key:T.String({pattern:'^site_[a-zA-Z0-9_-]{8,90}$',maxLength:96}),batch_id:uuid,config_version:T.Integer({minimum:1}),view_id:uuid,view_started_at:T.String({format:'date-time'}),sample_rate:num(0.000001,1),consent:obj({analytics:T.Literal(true),policy_version:code}),context:contextSchema,events:T.Array(eventSchema,{minItems:1,maxItems:50})});
 export type Event = Static<typeof eventSchema>;
 export type Viewport = Static<typeof viewportSchema>;

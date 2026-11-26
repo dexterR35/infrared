@@ -53,7 +53,3 @@ export async function experimentReadout(db:DB,id:string,source:'recorded'|'seede
  return inTransaction?read(db):db.transaction(read);
 }
 export async function freezeExperimentReadout(db:DB,id:string){return db.transaction(async tx=>{const[e]=await tx.query('SELECT site_id FROM experiments WHERE id=$1',[id]);if(!e)throw new Problem(404,'EXPERIMENT_NOT_FOUND');await tx.query('SELECT id FROM sites WHERE id=$1 FOR UPDATE',[e.site_id]);await tx.query('SELECT id FROM experiments WHERE id=$1 FOR UPDATE',[id]);const readout=await experimentReadout(tx,id,'recorded',true);if(!readout.ready)throw new Problem(409,'READOUT_NOT_READY');await tx.query('UPDATE experiments SET final_readout=$2 WHERE id=$1',[id,JSON.stringify(readout)]);return {ok:true,readout};});}
-export async function approvedExperimentContexts(db:DB,siteId:string,page:any){
- const experiments=await db.query("SELECT id,control_variant,treatment_variant,revision FROM experiments WHERE site_id=$1 AND page_key=$2 AND status IN ('running','paused') AND revision=$3",[siteId,page.page_key,page.revision]);
- return experiments.flatMap(e=>[e.control_variant,e.treatment_variant].map(variant=>({experiment_id:e.id,revision:e.revision,locale:page.locale,state:page.state,variant})));
-}

@@ -1,8 +1,8 @@
-# Infrared by Graphoria — What It Does
+# Infrared - What It Does
 
 **See the clicks. Understand the experience.**
 
-Infrared is a private analytics workspace for marketing teams that run campaign landing pages. It shows where visitors click, how far they scroll, which calls to action they actually see, and which pages, campaigns and variants bring in registrations and customers. It does this on only the exact pages you choose, only after the visitor agrees, and without following anyone across the web.
+Infrared is a private analytics workspace for teams that run one or more websites. Each website is a separate project with its own tracking key, pages, heatmaps, reports and permissions. It shows where visitors click, how far they scroll, which calls to action they actually see, and which pages, campaigns and variants bring in registrations and customers. It collects only on websites an owner has approved, only on the pages your rules allow, only after the visitor agrees, and without following anyone across the web.
 
 This document covers what Infrared can do. It explains features only, with no technical detail.
 
@@ -34,6 +34,7 @@ This document covers what Infrared can do. It explains features only, with no te
 
 ## In one minute
 
+- **Website projects:** add a website once, install one snippet, and pages are discovered automatically within your include/exclude rules.
 - **Visual heatmaps** of clicks, scroll depth, element engagement, repeated clicks and clicks that got no response, drawn over a real screenshot of your page.
 - **Campaign overview** comparing all your landing pages side by side.
 - **Funnels** from page view, to the main button being seen, to the main button being clicked.
@@ -70,6 +71,9 @@ A private, password-protected entry to your own workspace. There is no public ac
 
 ### Main pages
 
+#### Projects
+The starting point. Create a project from a website address (HTTPS only); Infrared prepares its Home page, default privacy exclusions (login, account, checkout, payment and similar paths) and a unique tracking snippet. The selected project scopes every other page of the workspace. An owner approves the website, with the reviewed consent policy version, before any data is collected.
+
 #### 1. Overview (Campaign analytics)
 The home page for the whole portfolio.
 - Three headline numbers, one daily trend chart and a compact table of your landing pages.
@@ -83,7 +87,7 @@ The list of every page you track.
 - Shows how many pages exist, how many are enabled and how many are waiting for approval.
 - Search by name or address.
 - Turn collection on or off for each page.
-- **Add landing page** takes one exact page address. The page is saved as a disabled draft until it is approved.
+- **Add landing page** takes one exact page address. On whole-site projects, pages are added automatically as visitors reach them within your rules.
 - **Check link & pixel** runs directly from this list.
 - One click on a page opens its heatmap.
 
@@ -218,7 +222,7 @@ For every registered element, the table shows how many views saw it, how many vi
 Infrared is built for teams that run many campaigns across several countries and products.
 
 - **Markets:** each website carries its market, language, currency and local time zone (for example United Kingdom on London time, Romania on Bucharest time).
-- **Products:** pages are labelled Casino, Sport or Campaign.
+- **Products:** pages carry your own product labels (for example clothing, services or campaigns). There are no preset industry categories.
 - **Brands and page families:** related pages are grouped for portfolio reporting.
 - **Acquisition goals:** each page records what it is meant to achieve.
 - **Filters everywhere:** Market, Product and Brand filters work on the registry, landing pages, Overview, Acquisition and Experiments.
@@ -301,8 +305,7 @@ Infrared includes a complete, disciplined testing lab.
 - **Experiment portfolio** listing every test, its status, assigned and measured visitors, and its main metric.
 - **Experiment heatmaps** that use only the visitors assigned to each version, each drawn on that version's own screenshot.
 - **Experience guardrails** for each version, such as speed, errors and frustration signals, to review before rollout.
-- **Local experiment lab** to preview the full flow safely, including consent, version assignment, clicks, a demo registration and consent withdrawal.
-- **Sample outcomes** can be generated for training. They are always marked as **SAMPLE DATA** and never mixed with real results.
+- **Backend integration:** your website's server registers visits, confirms which version was shown and reports outcomes through a private integration key. Keys are shown once and can be revoked.
 
 ---
 
@@ -452,10 +455,10 @@ Infrared is tested continuously and thoroughly.
   - creating experiments, assigning versions and confirming what was shown;
   - charts, tables, zoom, keyboard use and mobile layouts;
   - attempts to inject malicious content, which must be blocked.
-- **Link checks** confirm that the dashboard, demo pages and collection points work and that the tracking code has not been altered.
+- **Link checks** confirm that the dashboard, sign-in, project list and collection points work and that the tracking code has not been altered.
 - **Backup round-trip test:** a backup is created, restored into an empty workspace and verified.
 - **Your data is never touched by tests:** every test run uses its own temporary workspace and is cleaned up afterwards.
-- **Safe test pages:** fictional Halloween and Christmas casino pages, and a consented experiment lab, let you try everything without touching a real website.
+- **Disposable test fixtures:** automated tests use their own temporary websites and databases and never touch a real website.
 
 ---
 
@@ -494,16 +497,16 @@ Every person sees only the websites they are a member of.
 - No financial tracking, and no guessing of deposits or registrations from clicks.
 - No automatic "winner" claims, no invented uplift and no automated rollouts.
 - No reliance on outside analytics products. Infrared is built entirely in-house.
-- No whole-site tracking. Only the exact pages you choose.
+- No collection outside your rules. Whole-site projects respect include/exclude rules, and sensitive paths such as login, account, checkout and payment are excluded by default.
 
 ---
 
 ## Current release status
 
-This release is a **complete local demonstration workspace**. Every feature above works today on the built-in test pages, using real clicks from your own browser.
+Infrared runs as a private, self-hosted workspace (native Node.js with a local PostgreSQL-compatible database, or an optional hosted PostgreSQL database).
 
-**Collection on live company websites is deliberately switched off** until the production setup is approved. That setup includes a secure public collection address, company sign-in, consent platform connection and final approvals. Pages already added for the UK and Romania markets are saved as **disabled drafts**. They are ready to go live once those steps are complete.
+**Live collection requires a production setup:** HTTPS addresses for the dashboard and the collector, an owner approval for each website, and a recorded consent policy version. Until then, websites stay saved as projects with collection blocked, and the installation screen explains what is missing.
 
 ---
 
-*Infrared by Graphoria: private, precise and honest analytics for the landing pages that matter.*
+*Infrared: private, precise and honest website analytics.*

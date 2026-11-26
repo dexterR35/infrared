@@ -1,3 +1,5 @@
+import {visibleFraction} from '../../packages/domain/visibility.js';
+import {discoverElements} from './discovery.js';
 import {matchPage,type Selector} from '../../packages/domain/matcher.js';
 import {validCollectorOrigin} from '../../packages/domain/endpoint.js';
 import {scrollMetrics} from '../../packages/domain/metrics.js';
@@ -15,6 +17,7 @@ function allowedContext(p:PublicPage,h:HostContext){return [p,...(h.acquisitionI
 interface PublicConfig {schema_version:2;enabled:boolean;config_version:number;sample_rate:number;expires_in:number;pages:PublicPage[];features?:string[];collection_mode?:'whole_site';rules?:SiteRules;site_elements?:string[];site_actions?:string[];disabled_page_keys?:string[];journeys?:true}
 let options:Options|undefined,configuration:PublicConfig|undefined,page:PublicPage|undefined;
 let state='UNINITIALIZED',reason='',generation=0,configAt=0,view='',segment='',ordinal=0,seq=0,started=0,monoStart=0,lastInteraction=0;
+let discovered:string[]=[];
 let queue:Event[]=[],cleanup:(()=>void)[]=[],controller:AbortController|undefined,flushing=false;
 let maxReach=0,maxScroll=0,visible=0,lastTick=0,lastProgress=0,geometry='',dropped=0;
 let diagnosticObserver:ReturnType<typeof installDiagnostics>|undefined,signals:ReturnType<typeof installSignals>|undefined;
@@ -39,7 +42,7 @@ function active() {
 }
 function clear(next='WAITING_FOR_PERMISSION',why='') {
  generation++;controller?.abort();controller=undefined;for(const fn of cleanup.splice(0))fn();
- diagnosticObserver?.destroy();diagnosticObserver=undefined;signals?.destroy();signals=undefined;queue=[];view='';segment='';page=undefined;configuration=undefined;flushing=false;state=next;reason=why;
+ diagnosticObserver?.destroy();diagnosticObserver=undefined;signals?.destroy();signals=undefined;queue=[];view='';segment='';page=undefined;configuration=undefined;discovered=[];flushing=false;state=next;reason=why;
 }
 function viewport():Viewport {
  const de=document.documentElement,v=window.visualViewport;
@@ -55,7 +58,7 @@ function emit(payload:Payload) {
  queue.push(e);if(queue.length>=20)queueMicrotask(()=>void flush());return e;
 }
 function context():Context {
- const c=options!.context;return {page_key:c.pageKey,revision:c.revision,locale:c.locale,variant:c.variant,state:c.state,campaign:c.campaign||'unknown',...(c.acquisitionId?{acquisition_id:c.acquisitionId}:{}),...(wholeSite()?{page_path:activePath}:{}),...(journey?{session_id:journey.id,session_seq:journey.seq}:{})};
+ const c=options!.context;return {...(discovered.length?{auto_elements:discovered}:{}),page_key:c.pageKey,revision:c.revision,locale:c.locale,variant:c.variant,state:c.state,campaign:c.campaign||'unknown',...(c.acquisitionId?{acquisition_id:c.acquisitionId}:{}),...(wholeSite()?{page_path:activePath}:{}),...(journey?{session_id:journey.id,session_seq:journey.seq}:{})};
 }
 async function flush(keepalive=false,draining=false) {
  if(flushing||!permitted(!draining)||!view||!configuration||Date.now()-configAt>=60000)return;
@@ -123,7 +126,7 @@ async function refresh() {
   const current=pageFor(next);
   if(!next.enabled||!current||current.page_key!==options!.context.pageKey||!allowedContext(current,options!.context)){clear('DISABLED','POLICY_CHANGED');return;}
   // The complete view retains its issued epoch and sample rate; restrictive current policy still wins.
-  if(!(current.campaign_codes??['unknown']).includes(options!.context.campaign??'unknown')){clear('DISABLED','UNREGISTERED_CAMPAIGN');return;}if(!current.diagnostics_enabled||JSON.stringify(current.diagnostic_error_codes)!==JSON.stringify(page?.diagnostic_error_codes)){diagnosticObserver?.destroy();diagnosticObserver=undefined;}page=current;
+  if(!(current.campaign_codes??['unknown']).includes(options!.context.campaign??'unknown')){clear('DISABLED','UNREGISTERED_CAMPAIGN');return;}if(!current.diagnostics_enabled||JSON.stringify(current.diagnostic_error_codes)!==JSON.stringify(page?.diagnostic_error_codes)){diagnosticObserver?.destroy();diagnosticObserver=undefined;}current.elements=[...new Set([...current.elements,...discovered])];current.actions=[...new Set([...current.actions,...discovered.filter(id=>/^auto\.(button|a)\./.test(id))])];page=current;
   configuration={...next,config_version:configuration!.config_version,sample_rate:configuration!.sample_rate};configAt=Date.now();
  }catch{if(g===generation&&Date.now()-configAt>=60000)clear('DISABLED','CONFIG_EXPIRED');}
 }
@@ -138,6 +141,7 @@ async function activate() {
   if(!(p.campaign_codes??['unknown']).includes(host.campaign??'unknown')){clear('DISABLED','UNREGISTERED_CAMPAIGN');return;}
   if(crypto.getRandomValues(new Uint32Array(1))[0]/4294967296>=c.sample_rate){clear('SAMPLED_OUT');return;}
   if(c.journeys)journey=readJourney();else forgetJourney();
+  if(c.features?.includes('auto-elements-v1')){const scan=discoverElements();discovered=scan.elements;p.elements=[...new Set([...p.elements,...discovered])];p.actions=[...new Set([...p.actions,...discovered.filter(id=>/^auto\.(button|a)\./.test(id))])];cleanup.push(()=>scan.destroy());}
   configuration=c;page=p;activePath=p.selector.path;configAt=Date.now();view=crypto.randomUUID();segment=crypto.randomUUID();ordinal=0;seq=0;started=Date.now();lastInteraction=started;monoStart=performance.now();lastTick=monoStart;geometry='';state='ACTIVE';
   retries=0;transportFailures=0;dropped=0;lastDelivery='';
   const nav=navigator as Navigator&{userAgentData?:{mobile?:boolean}};
@@ -156,7 +160,7 @@ async function activate() {
   cleanup.push(()=>io.disconnect());
   const tick=setInterval(()=>{try{
    if(!permitted()){clear();return;}if(!active()){for(const value of exposures.values())value.since=0;if(Date.now()-configAt>=60000)clear('DISABLED','CONFIG_EXPIRED');return;}
-   progress();for(const [el,record] of exposures){if(record.sent)continue;if(!el.isConnected||privateTarget(el,0,0,false)){record.since=0;continue;}const r=el.getBoundingClientRect();const ratio=Math.max(0,Math.min(r.bottom,innerHeight)-Math.max(r.top,0))/Math.max(1,r.height);if(ratio<0.5){record.since=0;continue;}if(!record.since)record.since=performance.now();if(performance.now()-record.since>=1000){emit({type:'exposure',element_id:record.id,qualified_ms:Math.round(performance.now()-record.since),threshold:0.5,first_qualified:true});record.sent=true;}}
+   progress();for(const [el,record] of exposures){if(record.sent)continue;if(!el.isConnected||privateTarget(el,0,0,false)){record.since=0;continue;}const r=el.getBoundingClientRect();const ratio=visibleFraction(r,document.documentElement.clientWidth,innerHeight);if(ratio<0.5){record.since=0;continue;}if(!record.since)record.since=performance.now();if(performance.now()-record.since>=1000){emit({type:'exposure',element_id:record.id,qualified_ms:Math.round(performance.now()-record.since),threshold:0.5,first_qualified:true});record.sent=true;}}
   }catch{/* ignored */}},500),send=setInterval(()=>void flush(),5000),poll=setInterval(()=>void refresh(),45000);
   cleanup.push(()=>{clearInterval(tick);clearInterval(send);clearInterval(poll);});
  }catch{if(g===generation)clear('DISABLED','CONFIG_UNAVAILABLE');}

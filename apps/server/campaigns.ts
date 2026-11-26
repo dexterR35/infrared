@@ -3,7 +3,7 @@ import {cohortSegments,type SegmentFact} from '../../packages/domain/metrics.js'
 import {engagement} from '../../packages/domain/advanced.js';
 import {Problem} from './security.js';
 import {activitySeries,segmentDevices} from '../../packages/domain/chart-series.js';
-export interface PortfolioFilter {market?:string;product?:string;brand?:string;variant?:string;from?:string;to?:string;device?:string;campaign?:string;data_source?:'recorded'|'seeded'|'legacy'}
+export interface PortfolioFilter {site_id?:string;market?:string;product?:string;brand?:string;variant?:string;from?:string;to?:string;device?:string;campaign?:string;data_source?:'recorded'|'seeded'|'legacy'}
 export function dateWindow(f:{from?:string;to?:string}){for(const v of [f.from,f.to])if(v&&(!/^\d{4}-\d{2}-\d{2}$/.test(v)||!Number.isFinite(Date.parse(v+'T00:00:00Z'))||new Date(v+'T00:00:00Z').toISOString().slice(0,10)!==v))throw new Problem(400,'INVALID_DATE_RANGE');const from=f.from?new Date(f.from+'T00:00:00Z'):new Date(Date.now()-7*86400000),to=f.to?new Date(f.to+'T00:00:00Z'):new Date();if(f.to)to.setUTCDate(to.getUTCDate()+1);if(+to<+from||+to-+from>93*86400000)throw new Problem(400,'INVALID_DATE_RANGE');return {from:from.toISOString(),to:to.toISOString()};}
 export async function portfolio(db:DB,f:PortfolioFilter,siteIds:string[]){
  const dates=dateWindow(f),source=f.data_source??'recorded';

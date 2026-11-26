@@ -38,9 +38,12 @@ it('keeps appended actions outside an existing paging snapshot until refresh',as
  const fresh=(await get('/api/tables/audit?page_size=5')).json();expect(fresh.rows[0].id).toBe('table_new');expect(fresh.pagination.rowCount).toBe(first.pagination.rowCount+1);
 });
 it('serves complete maintenance history and sorts nullable fields with nulls last',async()=>{
- const result=(await get('/api/tables/operations?page=2&page_size=10')).json();expect(result.pagination).toEqual({pageIndex:2,pageSize:10,rowCount:21,pageCount:3});expect(result.rows).toHaveLength(1);
- const nullable=(await get('/api/tables/operations?sort=finished_at&direction=asc&page_size=25')).json();expect(nullable.rows.at(-1).id).toBe('table_run_020');
- const filtered=(await get('/api/tables/operations?search=failed')).json();expect(filtered.pagination.rowCount).toBe(0);
+ const result=(await get('/api/tables/operations?include_monitor=true&page=2&page_size=10')).json();expect(result.pagination).toEqual({pageIndex:2,pageSize:10,rowCount:21,pageCount:3});expect(result.rows).toHaveLength(1);
+ const nullable=(await get('/api/tables/operations?include_monitor=true&sort=finished_at&direction=asc&page_size=25')).json();expect(nullable.rows.at(-1).id).toBe('table_run_020');
+ const filtered=(await get('/api/tables/operations?include_monitor=true&search=failed')).json();expect(filtered.pagination.rowCount).toBe(0);
+ // Per-minute health checks are hidden unless requested, so daily maintenance stays visible.
+ const hidden=(await get('/api/tables/operations')).json();expect(hidden.rows.some((r:any)=>r.kind==='monitor')).toBe(false);
+ expect((await get('/api/tables/operations?include_monitor=yes')).statusCode).toBe(400);
 });
 it('enforces authentication, owner-only history and strict bounded query validation',async()=>{
  for(const endpoint of ['/api/tables/audit','/api/tables/operations']){

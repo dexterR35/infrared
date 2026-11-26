@@ -3,12 +3,13 @@ import type {DB} from '../../packages/db/index.js';
 import type {VisitInput,OutcomeInput,SpendInput} from '../../packages/contracts/acquisition.js';
 import {Problem,canonical,digest} from './security.js';
 import {dateWindow} from './campaigns.js';
+import {config} from './config.js';
 
 export function acquisitionContext(page:any,site:any){return {market:page.market??site.market??'unknown',product:page.product,brand:site.brand,locale:page.locale,page_family:page.page_family,currency:site.currency,report_timezone:site.report_timezone};}
 export async function eligiblePage(db:DB,siteId:string,pageKey:string,lock=false){
  const[site]=await db.query('SELECT * FROM sites WHERE id=$1'+(lock?' FOR UPDATE':''),[siteId]);
  const[privacy]=await db.query("SELECT value FROM settings WHERE key='privacy'");
- if(!site||!site.enabled||site.approval_state!=='approved'||privacy.value.global_stop)throw new Problem(403,'COLLECTION_DISABLED');
+ if(!site||site.archived||!site.enabled||site.approval_state!=='approved'||privacy.value.global_stop||(site.environment==='synthetic'&&config.releaseStatus==='PRODUCTION'))throw new Problem(403,'COLLECTION_DISABLED');
  const[page]=await db.query('SELECT * FROM pages WHERE site_id=$1 AND page_key=$2',[siteId,pageKey]);
  if(!page||!page.enabled||page.approval_state!=='approved')throw new Problem(403,'PAGE_DISABLED');return {site,page,privacy:privacy.value};
 }
@@ -16,6 +17,7 @@ export async function registerAcquisitionVisit(db:DB,siteId:string,b:VisitInput,
  return db.transaction(async tx=>{
   const {site,page}=await eligiblePage(tx,siteId,b.page_key,true);
   if(!b.analytics_consent||!b.public_context||!page.campaign_codes.includes(b.campaign))throw new Problem(422,'ACQUISITION_CONTEXT_INVALID');
+  if(site.environment!=='synthetic'&&b.policy_version!==site.consent_policy_version)throw new Problem(403,'CONSENT_POLICY_MISMATCH');
   const hash=digest(canonical(b)),subject=digest(siteId+'|'+b.unit_token);
   const[receipt]=await tx.query('SELECT * FROM acquisition_visits WHERE site_id=$1 AND receipt_id=$2',[siteId,b.receipt_id]);
   if(receipt){if(receipt.request_hash!==hash||receipt.data_source!==source)throw new Problem(409,'VISIT_RECEIPT_CONFLICT');return publicVisit(receipt);}

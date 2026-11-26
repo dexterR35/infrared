@@ -1,0 +1,119 @@
+/* Workspace surfaces only; the existing sidebar palette stays in dashboard-polish.css. */
+:root[data-theme='dark'] {
+ color-scheme: dark;
+ --canvas: #151817;
+ --surface: #1e2320;
+ --surface-subtle: #252b27;
+ --surface-muted: var(--surface-subtle);
+ --surface-raised: #2d3530;
+ --border: #38423b;
+ --line: var(--border);
+ --brand-canvas: var(--canvas);
+ --brand-paper: var(--surface);
+ --brand-card: var(--surface);
+ --brand-line: var(--border);
+ --brand-muted: #adb9b1;
+ --text-primary: #edf2ee;
+ --text-secondary: #cbd5ce;
+ --text-muted: #a1afa6;
+ --text-accent: #ffab85;
+ --muted: var(--text-muted);
+ --code-text: #dce7df;
+ --orange: #ff9369;
+ --green: #7bd5a3;
+ --chart-1: #ff9369;
+ --chart-2: #80acff;
+ --chart-3: #70caa3;
+ --chart-4: #bd9aef;
+ --chart-5: #e895bc;
+ --chart-6: #d2c776;
+ --chart-7: #72c9d4;
+ --chart-8: #e7b27c;
+ --chart-axis: #aebbb3;
+ --chart-grid: #364039;
+ --chart-cursor: #303b33;
+ --chart-brush: #252d28;
+ background: var(--canvas);
+ color: var(--text-primary);
+}
+
+:root[data-theme='dark'] :is(body,.app,.main-shell,.login,.boot) { background: var(--canvas); }
+:root[data-theme='dark'] :is(.topbar,.panel,.stat,.overview-metrics,.more-analysis,.login-card,.ui-modal,.modal,.date-popover,.filters,.reference-picker,.campaign-filters,.audience-card) {
+ background: var(--surface);
+ border-color: var(--border);
+ color: var(--text-primary);
+}
+:root[data-theme='dark'] :is(.page-heading h1,.panel-header h2,.content-panel h2,.analytic-metric strong,.stat>strong,.page-name strong,.login-story h1,.login-card h2,.intelligence-panel h2,.growth-effect) { color: var(--text-primary); }
+:root[data-theme='dark'] :is(.page-heading p,.workspace-access,.page-summary,.main-footer,.workspace-next,.eyebrow,.small-note,.project-origin,.table-detail,.table-footer,.report-method,.report-scope,.snippet-meta,.scope-label,.reference-history-heading p,.login-story>p,.login-feature,.login-footer) { color: var(--text-muted); }
+
+/* Native controls and shared fields, including dialogs rendered outside the app root. */
+:root[data-theme='dark'] :is(.main-shell,.ui-modal,.modal,.login) :is(input:not([type='checkbox']):not([type='radio']):not([type='range']),select,textarea,.search-box,.registry-editor) {
+ background-color: var(--canvas);
+ color: var(--text-primary);
+ border-color: var(--border);
+}
+:root[data-theme='dark'] :is(input,textarea)::placeholder { color: var(--text-muted); opacity: 1; }
+:root[data-theme='dark'] :is(input,select,textarea) { accent-color: var(--orange); }
+:root[data-theme='dark'] :is(.main-shell,.ui-modal,.modal,.login) :is(label,.select-field,.capture-width) { color: var(--text-secondary); }
+:root[data-theme='dark'] :is(button,a,summary,input,select,textarea):focus-visible { outline-color: var(--orange); }
+:root[data-theme='dark'] :is(.form-field-control[aria-invalid='true'],.input[aria-invalid='true']) { border-color: #f5988d; }
+:root[data-theme='dark'] :is(.form-field-error,.error-inline,.table-error,.notice.error) { color: #ffafa4; }
+
+:root[data-theme='dark'] :is(.main-shell,.ui-modal,.modal,.login) .btn {
+ background: var(--surface-subtle);
+ color: var(--text-primary);
+ border-color: var(--border);
+ box-shadow: none;
+}
+:root[data-theme='dark'] :is(.main-shell,.ui-modal,.modal,.login) .btn:hover:enabled { background: var(--surface-raised); border-color: #59685e; }
+:root[data-theme='dark'] :is(.main-shell,.ui-modal,.modal,.login) .btn.primary { background: #d46137; border-color: #d46137; color: #fff; }
+:root[data-theme='dark'] :is(.main-shell,.ui-modal,.modal,.login) .btn.primary:hover:enabled { background: #e07147; border-color: #e07147; }
+:root[data-theme='dark'] :is(.main-shell,.ui-modal,.modal,.login) .btn.primary svg { color: #fff0e8; }
+:root[data-theme='dark'] :is(.main-shell,.ui-modal,.modal) :is(.icon-btn,.table-explore,.table-expand-button,.table-page-buttons button) { background: var(--surface-subtle); color: var(--text-secondary); border-color: var(--border); }
+:root[data-theme='dark'] :is(.main-shell,.ui-modal,.modal) :is(.icon-btn,.table-explore,.table-expand-button,.table-page-buttons button):hover:enabled { background: var(--surface-raised); color: var(--text-primary); }
+:root[data-theme='dark'] :is(.text-button,.row-action,.campaign-name) { color: var(--text-accent); }
+
+/* Tables and expanded detail rows use the same surface hierarchy. */
+:root[data-theme='dark'] .page-table th { background: var(--surface-subtle); color: var(--text-secondary); border-color: var(--border); }
+:root[data-theme='dark'] .page-table td { color: var(--text-secondary); border-color: var(--border); }
+:root[data-theme='dark'] .page-table tr:hover td,
+:root[data-theme='dark'] .page-table tr.table-row-expanded>td,
+:root[data-theme='dark'] .page-table tr.table-expanded-row>td { background: var(--surface-subtle); }
+:root[data-theme='dark'] :is(.table-pagination,.table-footer,.table-search) { background: var(--surface); border-color: var(--border); color: var(--text-muted); }
+:root[data-theme='dark'] :is(.table-expanded-content,.panel-header,.analytics-footnote,.chart-data,.chart-method,.ui-modal-header,.project-form-actions,.project-locale-heading,.project-card-footer,.project-privacy,.insight-rule) { border-color: var(--border); }
+:root[data-theme='dark'] :is(.table-sort:hover,.detail-grid h3,.installation-details h3) { color: var(--text-primary); }
+
+/* Charts, disclosures, notices and project setup. */
+:root[data-theme='dark'] :is(.more-analysis-content,.analytics-footnote,.performance-grid,.code-block,.code-block>div,.insight-note,.project-setup-note,.project-enable,.project-empty,.growth-status,.growth-pipeline>div,.info-box,.selector-preview,.intelligence-note,.intelligence-setup,.intelligence-controls,.intelligence-click-result,.intelligence-branch) {
+ background: var(--surface-subtle);
+ border-color: var(--border);
+ color: var(--text-secondary);
+}
+:root[data-theme='dark'] :is(.more-analysis>summary:hover,.chart-page-picker summary,.device-switch,.chart-style,.project-site-icon,.project-empty-icon,.section-icon,.page-favicon,.top-avatar,.login-lock) { background: var(--surface-subtle); border-color: var(--border); color: var(--text-secondary); }
+:root[data-theme='dark'] :is(.device-switch button.selected,.chart-style button[aria-pressed='true'],.mode-tabs button.active) { background: var(--surface-raised); color: var(--text-accent); }
+:root[data-theme='dark'] .chart-tooltip { background: #252d28f5; border-color: #526157; color: var(--text-primary); box-shadow: 0 8px 24px #0005; }
+:root[data-theme='dark'] .chart-empty { background: var(--surface-subtle); border-color: var(--border); }
+:root[data-theme='dark'] :is(.project-card:hover,.project-steps li,.project-install-facts>div,.project-privacy,.intelligence-table,.intelligence-history) { border-color: var(--border); }
+:root[data-theme='dark'] .project-card:hover { box-shadow: 0 6px 20px #0003; }
+:root[data-theme='dark'] .ui-modal { box-shadow: 0 24px 90px #0008; }
+:root[data-theme='dark'] .ui-modal::backdrop { background: #080c0bd1; }
+:root[data-theme='dark'] .ui-modal-icon { background: #492e23; color: #ffb48c; border-color: #694230; }
+:root[data-theme='dark'] .ui-modal-close:hover { background: var(--surface-raised); }
+:root[data-theme='dark'] .project-setup-note svg { color: var(--green); }
+:root[data-theme='dark'] :is(.project-steps li>span,.count-pill,.badge,.revision) { background: var(--surface-raised); color: var(--text-secondary); border-color: var(--border); }
+:root[data-theme='dark'] :is(.badge.green,.project-steps .complete>span,.growth-status.good,.project-install-facts>div.ready) { background: #203d30; border-color: #355b46; color: #90ddb2; }
+:root[data-theme='dark'] .badge.blue { background: #253953; color: #adcaff; }
+:root[data-theme='dark'] :is(.badge.orange,.growth-status.warn,.info-box.warning,.project-install-facts>div.missing,.registry-draft-note,.install-warning) { background: #433125; border-color: #68503b; color: #f5c29b; }
+:root[data-theme='dark'] :is(.installation-good,.installation-details .installation-good,.capture-success) { color: #88d9ac; }
+:root[data-theme='dark'] :is(.installation-bad,.installation-details .installation-bad) { color: #ff9e93; }
+:root[data-theme='dark'] :is(.notice.error,.table-error) { background: #422a28; border-color: #70413b; }
+:root[data-theme='dark'] :is(.funnel-track,.scroll-row>div) { background: var(--surface-raised); }
+:root[data-theme='dark'] :is(.heatmap-toolbar,.heatmap-subtoolbar,.heatmap-footer,.heatmap-stage,.heatmap-subtoolbar code,.compare-foot,.comparison-note,.data-source-bar) { background: var(--surface-subtle); border-color: var(--border); color: var(--text-secondary); }
+:root[data-theme='dark'] :is(.data-source-bar strong,.source-caption,.report-note,.intelligence-panel p,.growth-heading p) { color: var(--text-secondary); }
+:root[data-theme='dark'] .toast { background: var(--surface-raised); border-color: #526157; color: var(--text-primary); box-shadow: 0 8px 30px #0005; }
+:root[data-theme='dark'] .login-story h1 em { color: var(--orange); }
+:root[data-theme='dark'] .login .product-name { color: var(--text-primary); }
+:root[data-theme='dark'] :is(.main-shell,.ui-modal,.login) :is(input:not([type='checkbox']):not([type='radio']):not([type='range']),select,textarea):is(:focus,:focus-visible) { outline: none; border-color: var(--orange); box-shadow: inset 0 0 0 1px var(--orange); }
+:root[data-theme='dark'] :is(.search-box,.table-search):focus-within { border-color: var(--orange); box-shadow: inset 0 0 0 1px var(--orange); }
+:root[data-theme='dark'] :is(.search-box,.table-search) input:is(:focus,:focus-visible) { border-color: transparent; box-shadow: none; }
+

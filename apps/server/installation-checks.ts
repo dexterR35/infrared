@@ -75,7 +75,7 @@ export async function installationStatuses(db:DB,ids:string[]){
  return db.query(`SELECT p.site_id,p.page_key,s.report_timezone,
  CASE WHEN s.environment='synthetic' THEN 'local_demo' ELSE 'real_site' END AS environment,
  CASE WHEN (SELECT (value->>'global_stop')::boolean FROM settings WHERE key='privacy') THEN 'stopped'
- WHEN s.environment<>'synthetic' OR NOT s.enabled OR NOT p.enabled OR s.approval_state<>'approved' OR p.approval_state<>'approved' THEN 'disabled' ELSE 'enabled' END AS collection,
+ WHEN s.archived OR NOT s.enabled OR NOT p.enabled OR s.approval_state<>'approved' OR p.approval_state<>'approved' THEN 'disabled' ELSE 'enabled' END AS collection,
  c.result AS check,
  (SELECT count(*)::int FROM jobs j JOIN views v ON v.site_id=j.site_id AND v.view_id=j.view_id WHERE v.site_id=p.site_id AND v.page_key=p.page_key AND v.data_source='recorded' AND j.state IN ('pending','processing')) AS pending_views,
  (SELECT count(*)::int FROM jobs j JOIN views v ON v.site_id=j.site_id AND v.view_id=j.view_id WHERE v.site_id=p.site_id AND v.page_key=p.page_key AND v.data_source='recorded' AND j.state='failed') AS failed_views,

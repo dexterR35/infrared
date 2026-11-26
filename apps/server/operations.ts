@@ -8,9 +8,8 @@ import {recentIngestion,telemetrySnapshot} from './telemetry.js';
 export interface OperationsSettings {automatic_retention:boolean;retention_hour_utc:number;automatic_backup:boolean;backup_hour_utc:number;backup_days:number;queue_warning_seconds:number;rejection_warning_percent:number}
 export async function operationStatus(db:DB){
  const[settings]=await db.query("SELECT value FROM settings WHERE key='operations'");const jobs=await db.query('SELECT state,count(*)::int AS count FROM jobs GROUP BY state');
- const[lag]=await db.query("SELECT COALESCE(EXTRACT(epoch FROM(now()-min(updated_at))),0)::double precision AS seconds FROM jobs WHERE state IN ('pending','processing')");
- const runs=await db.query('SELECT id,kind,status,started_at,finished_at,detail,error_code FROM operation_runs ORDER BY started_at DESC LIMIT 30'),alerts=await db.query('SELECT * FROM operation_alerts ORDER BY active DESC,last_seen DESC LIMIT 30');
- return {settings:settings.value as OperationsSettings,jobs,queue_lag_seconds:Number(lag.seconds),runs,alerts,telemetry:telemetrySnapshot(),collector_window:recentIngestion(),checked_at:new Date().toISOString(),backups_encrypted:false,external_notifications_configured:false};
+ const[lag]=await db.query("SELECT COALESCE(EXTRACT(epoch FROM(now()-min(updated_at))),0)::double precision AS seconds FROM jobs WHERE state IN ('pending','processing')"); const alerts=await db.query('SELECT * FROM operation_alerts ORDER BY active DESC,last_seen DESC LIMIT 30');
+ return {settings:settings.value as OperationsSettings,jobs,queue_lag_seconds:Number(lag.seconds),alerts,telemetry:telemetrySnapshot(),collector_window:recentIngestion(),checked_at:new Date().toISOString(),backups_encrypted:false,external_notifications_configured:false};
 }
 export function createOperations(db:DB,dataDir:string,backupRoot=path.join(dataDir,'backups')){
  let timer:ReturnType<typeof setInterval>|undefined,closing=false;const running=new Set<Promise<unknown>>();

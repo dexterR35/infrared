@@ -1,6 +1,31 @@
 # Local SASRec and EulerNet intelligence
 
-Infrared can train SASRec on registered interactions within a single consented page view and rank the next interaction from a supplied history. EulerNet estimates a registered element's click outcome over a defined observed window. Open **Analysis → Journey intelligence** to use either model independently or **Analyze both models** from the same first-exposure history. Training is an explicit local command; ordinary analytics does not require either model, Python, or training jobs.
+Infrared trains SASRec on registered interactions within a single consented page view and ranks the next interaction from a supplied history. EulerNet supports separate click and primary-action conversion objectives over a defined observed window. Open **Analysis → Journey intelligence** to train models directly from the database, schedule retraining, inspect progress and evaluations, explore journeys, and restore a saved version. Ordinary analytics does not require Python or trained models.
+
+## Automatic training
+
+After the optional runtime is installed once, select a page, activity source, variant and UTC activity dates, then choose **Train models**. Individual SASRec, click and conversion training buttons are also available. Datasets are generated internally from retained, scoped evidence and removed on success or failure. There is no need to download JSON or run Python commands for each training run. The app automatically detects `.local/intelligence-venv` unless `INFRARED_INTELLIGENCE_PYTHON` is explicitly set.
+
+Jobs and daily/weekly schedules are persisted in the database (migration 015). A database lock and unique running-job index serialize CPU training across API instances; replicas must share the same private model storage. The management/API process runs the scheduler every five seconds. A stopped server performs one missed run when restarted, without replaying every missed interval. Daily and weekly intervals are measured from when the schedule is saved. Scheduled windows roll over the selected number of UTC calendar dates and are clipped to raw retention. A changed page revision or revoked author permission disables its schedule. Scheduling stays off until an owner or administrator enables it for a scope. Automatic publication switches a single `active.json` pointer atomically to an immutable version; legacy manually installed pairs remain supported until the first managed publication.
+
+The dashboard polls job state and charts epoch training loss and, for EulerNet, validation loss. SASRec also records validation NDCG. Each objective fails independently with a visible error when runtime, observation or support requirements are unmet; the previously active model stays installed. Training is bounded to 30 minutes; abandoned claims expire after 35 minutes. Pending jobs survive restart; interrupted jobs fail rather than being silently retried. The server cleans abandoned temporary datasets after their lease expires. Successful jobs save immutable artifacts under `intelligence/<scope-hash>/versions/<run-id>/`, validate against the current page/evidence/privacy policy, and publish the active pair. **Use this model version** restores an eligible version after repeating those checks. Expired or revoked versions cannot be restored. Retention removes managed version artifacts too. Logical backups retain schedules and job history, exclude weights, and mark restored runs as requiring retraining.
+
+Owners and administrators can train, schedule and restore versions with site membership, same-origin/CSRF controls, rate limits, and audited changes. Reporting roles can inspect runs, evaluation, the journey map and experiment comparisons. Installer access is denied.
+
+## Conversion, journeys and element reviews
+
+Conversion is a separate EulerNet checkpoint with target `qualified_exposure_primary_action_30s`: among eligible first exposures **before** the configured primary action has occurred, estimate whether that registered activation occurs in the following 30 seconds. Configure `primary_action_id` in the page policy. This is an observed activation goal, not a backend-verified registration or qualified acquisition. It requires the same fully observed windows, chronological partitions, minimum positive/negative cohorts, validation-only calibration and held-out baseline comparisons as the click model. Exposure-time features exclude later activity. Changing the primary action invalidates the conversion checkpoint. Click and conversion objectives have separate hashes, evaluations and probability outputs.
+
+The interactive journey map counts distinct views for each observed action and adjacent-action edge, suppresses small cohorts, and lets you follow branches. It is scoped to one page view, not a persistent user profile. Element reviews use fully observed exposure/click outcomes. An exploratory flag means an element's 95% Wilson click-rate interval is below the pooled interval of other reportable elements. Small real-site outcome cohorts are excluded from both displayed rows and peer comparisons. Different placements, overlapping views, and multiple comparisons limit interpretation: these flags suggest investigation and do not prove a defect or causal impact. The A/B comparison uses the existing randomized experiment readout and retains its maturity, validity and suppression checks; select each analysis variant separately when training.
+
+New endpoints:
+
+- `GET /api/intelligence/training`: scope query; recent runs, schedules, registered experiment variants and primary action.
+- `POST /api/intelligence/train`: scope, `from`, `to`, and `models` (`sasrec`, `euler`, `conversion`); returns HTTP 202 with run IDs.
+- `POST /api/intelligence/training/schedule`: scope, `interval_hours` (0/off, 24/daily, 168/weekly), `lookback_days` (1–90).
+- `POST /api/intelligence/training/rollback`: scope and `run_id`; restores a compatible, unexpired artifact.
+- `GET /api/intelligence/journey`: scope and dates; aggregate graph and exploratory element comparisons, without view identifiers.
+- `GET /api/intelligence/conversion/status` and `POST /api/intelligence/conversion/predict`: separate conversion status/evaluation and exposure-history inference, using the EulerNet prediction input contract.
 
 These are direct PyTorch implementations: SASRec uses causal self-attention, item/position embeddings and next-item cross-entropy; EulerNet uses complex polar feature interactions with learned real-valued orders and implicit real/imaginary feed-forward paths. The EulerNet implementation is independently written from the published architecture, with stability clamps, layer normalization and an Infrared-specific feature/label contract. It does not vendor upstream code or claim exact reproduction of paper benchmarks. RecBole is an alternative training framework, rather than a prerequisite; it is not installed by this integration. See the [SASRec paper](https://arxiv.org/abs/1808.09781), [EulerNet paper by Tian et al.](https://arxiv.org/abs/2304.10711), [RecBole's EulerNet reference](https://www.recbole.io/docs/user_guide/model/context/eulernet.html), and [PyTorch attention API](https://docs.pytorch.org/docs/stable/generated/torch.nn.MultiheadAttention.html).
 
@@ -20,11 +45,11 @@ Set the interpreter in `.env`, then restart the Infrared server:
 INFRARED_INTELLIGENCE_PYTHON=.local/intelligence-venv/Scripts/python.exe
 ```
 
-On macOS/Linux use `.local/intelligence-venv/bin/python`. The default interpreter is `python`. Python is launched locally with a bounded request through stdin; there is no public inference port or external inference API. For an existing installation, the normal startup migration adds `sites.intelligence_version` (migration 012).
+On macOS/Linux use `.local/intelligence-venv/bin/python`. Without an explicit setting, Infrared detects that virtual environment and falls back to `python` when absent. Python is launched locally with bounded processes; inference uses stdin and has no public port or external inference API. Existing installations receive the evidence-version and training migrations during normal startup.
 
-The supplied Node-only Docker image does not install Python/PyTorch. Both models are currently optional native workstation integrations. A deployed API needs a supported Python runtime, these requirements, the scripts under `apps/intelligence/`, and its private model directory. The current process-per-request design is a private analysis path, not a high-throughput public prediction tier.
+Python/PyTorch must be installed separately. Both models are optional native workstation integrations. A deployed API needs a supported Python runtime, these requirements, the scripts under `apps/intelligence/`, and its private model directory. The current process-per-request design is a private analysis path, not a high-throughput public prediction tier.
 
-## Export, train, inspect
+## Advanced manual export and training
 
 1. Sign in as an owner or administrator. In Journey intelligence, select a page, **Recorded activity** or **Generated samples**, and export dates (inclusive UTC calendar dates).
 2. Choose **Download training sequences**. This creates a private JSON dataset containing registered action tokens and sequence start/end timestamps. It excludes view IDs, session IDs, unit identifiers, URLs, form contents, coordinates, and demographic/source attributes. Each sequence belongs to one page view. The export is audited and rate limited.
@@ -36,7 +61,7 @@ The supplied Node-only Docker image does not install Python/PyTorch. Both models
 
    If the running app uses a custom `DATA_DIR` from `.env`, pass the same absolute directory to Python with `--data-dir C:/path/to/data`. The Python CLI reads the shell's `DATA_DIR`; it does not read `.env`. Training options are `--epochs` (default 20), `--max-length` (default 50), `--hidden` (default 64, even), and `--seed` (default 2026). CPU training is intentional for this first local implementation.
 
-4. Delete the downloaded dataset after training. In the dashboard choose **Refresh data**, build the observed history, and choose **Predict next action**. A model for another page, revision, variant, locale, presentation state, registry, data source, or evidence version cannot serve that request. The screen currently uses the page's current revision and default variant; the API/CLI can address a specified variant separately.
+4. Delete the downloaded dataset after training. In the dashboard choose **Refresh data**, build the observed history, and choose **Predict next action**. A model for another page, revision, variant, locale, presentation state, registry, data source, or evidence version cannot serve that request. The screen uses the current page revision and lets you choose its default or a registered experiment variant.
 
 The authenticated CLI can also download a dataset while the app is running:
 
@@ -59,7 +84,7 @@ Supported action tokens are:
 
 Events are ordered by SDK `seq`, regardless of arrival order. Backwards timestamps, duplicate relevant sequence positions, or repeated page-view markers exclude an ambiguous view. Unknown targets and other event types are excluded. Repeated clicks are preserved. There are no inferred terminal/abandonment events. Timing orders the observations; the model itself uses action positions, not elapsed time. Date/device/campaign filters elsewhere in the dashboard do not apply to this screen; it explicitly shows all devices and campaign codes for its scoped page configuration.
 
-Cross-page sessions, predictive funnels, behaviour clustering and friction detection are outside this implementation. They require different data contracts, validation or additional algorithms. No persistent visitor profile is created, and the existing opt-in cross-page journey setting is unchanged.
+Cross-page predictive funnels and behaviour clustering require different data contracts and remain outside these models. No persistent visitor profile is created, and the existing opt-in cross-page journey setting is unchanged.
 
 ## Evaluation and minimum data
 
@@ -81,7 +106,7 @@ Model expiry is the oldest exported view's start plus the raw retention duration
 
 Acquisition consent withdrawal rotates a site evidence version in the same database transaction that deletes linked raw evidence. All earlier site models and exports become incompatible, including a checkpoint retrained later from an old export. Retention subsequently removes revoked installed artifacts. A new export/retrain is required. Inference rechecks model status after Python returns to discard a result invalidated while it was running. Ordinary SDK consent denial continues to stop collection as before; the model does not add a new visitor deletion or identification mechanism.
 
-Standard logical backups retain the database evidence version but do not include Python environments, dataset exports or model files. Retrain after restoring into an empty target. Model artifacts are disposable derivatives; do not restore an old checkpoint independently over a newer database with withdrawals.
+Standard logical backups retain the database evidence version, training runs and schedules but do not include Python environments, temporary dataset exports or model files. Restored runs are marked as requiring retraining. Model artifacts are disposable derivatives; do not restore an old checkpoint independently over a newer database with withdrawals.
 
 ## API and verification
 
@@ -133,7 +158,7 @@ Validation states are deliberately explicit:
 | `needs_review` | A real-site, recorded-data model did not beat both baselines on test log loss or its test calibration error exceeded 0.10. |
 | `passes_offline_checks` | A real-site recorded model beat both baselines on test log loss and test calibration error was at most 0.10. This is a diagnostic threshold, not deployment approval or proof of lift. |
 
-Neither EulerNet nor SASRec is mandatory. For a real product, keep the simpler baseline if it performs as well or better, inspect calibration and exposure coverage on representative future traffic, monitor drift, and validate any resulting product change through the existing experiment process. There is no automatic personalization, campaign change, rollout or production approval in this integration. The standard Docker profile and public inference deployment remain outside the verified native path.
+Neither EulerNet nor SASRec is mandatory. For a real product, keep the simpler baseline if it performs as well or better, inspect calibration and exposure coverage on representative future traffic, monitor drift, and validate any resulting product change through the existing experiment process. There is no automatic personalization, campaign change, rollout or production approval in this integration. Public inference deployment remains outside the verified native path.
 
 The joint endpoint preserves the two objectives: SASRec's next observed action is not EulerNet's click-within-30-seconds outcome. It does not multiply a SASRec ranking logit by a click estimate, present a blended number as a probability, or silently rerank a different target. Both installed artifacts must match the same current scope/evidence version and pass expiry/cohort checks. The API rechecks both after inference; withdrawal invalidates both immediately and retention prunes both model directories.
 

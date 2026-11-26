@@ -19,7 +19,7 @@ describe('canonical page paths',()=>{
   expect(canonicalPath('/'+'a/'.repeat(13),DEFAULT_RULES)).toBeNull();
  });
  it('skips sensitive areas by default',()=>{
-  for(const path of ['/login','/account/orders','/admin/','/checkout/pay','/reset/abc','/api/v1/x'])expect(canonicalPath(path,DEFAULT_RULES),path).toBeNull();
+  for(const path of ['/login','/login/callback','/sign-in/return','/cart/items','/account/orders','/admin/','/checkout/pay','/reset/abc','/api/v1/x'])expect(canonicalPath(path,DEFAULT_RULES),path).toBeNull();
   expect(canonicalPath('/accounting-services',DEFAULT_RULES)).toBe('/accounting-services');
  });
  it('applies include rules and named patterns',()=>{
@@ -32,6 +32,10 @@ describe('canonical page paths',()=>{
 });
 
 describe('page keys',()=>{
+ it('keeps distinct website paths from sharing a page key',()=>{
+  const pairs=[['/','/home'],['/a/b','/a.b'],['/products','/Products'],['/products/:id','/products/id'],['/blog/*','/blog/all']];
+  for(const [a,b] of pairs)expect(pathKey(a)).not.toBe(pathKey(b));
+ });
  it('are readable, valid codes and stable',()=>{
   expect(pathKey('/')).toBe('p.home');
   expect(pathKey('/software-development')).toBe('p.software-development');

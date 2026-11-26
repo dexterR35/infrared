@@ -11,10 +11,13 @@ export async function audit(db:DB,userId:string|null,action:string,siteId:string
  await db.query('INSERT INTO audit(id,user_id,action,site_id,detail) VALUES($1,$2,$3,$4,$5)',[randomUUID(),userId,action,siteId,JSON.stringify(detail)]);
 }
 export class Limiter {
- private salt=token();private rotated=Date.now();private entries=new Map<string,{n:number;until:number}>();
+ private salt=token();private rotated=Date.now();private longest=0;private entries=new Map<string,{n:number;until:number}>();
  constructor(private readonly capacity=10000){}
  check(key:string,limit:number,window=60000) {
-  const now=Date.now();if(now-this.rotated>3600000){this.entries.clear();this.salt=token();this.rotated=now;}
+  // Rotating the key salt forgets every counter, so it must not happen inside the longest window in use
+  // (a daily cap would otherwise reset hourly). Keys stay in memory for at most one day.
+  const now=Date.now();this.longest=Math.max(this.longest,window);
+  if(now-this.rotated>Math.min(86400000,Math.max(3600000,this.longest))){this.entries.clear();this.salt=token();this.rotated=now;}
   const k=createHmac('sha256',this.salt).update(key).digest('hex');const v=this.entries.get(k);
   if(v&&v.until>=now){if(++v.n>limit)throw new Problem(429,'RATE_LIMIT');return;}
   // A full table must never reject unrelated callers. Windows restart by re-insertion, so the first entry is the oldest.

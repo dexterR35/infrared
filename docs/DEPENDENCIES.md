@@ -4,7 +4,7 @@ All direct versions are exact in `package.json`; `pnpm-lock.yaml` pins the resol
 
 | Layer | Selected implementation |
 | --- | --- |
-| Runtime | Native validation: Node 26.11.1. Container baseline: Node 24, immutable digest in Dockerfile |
+| Runtime | Node.js 24+; native validation on Node 26.11.1 |
 | Package manager | pnpm 11.25.0 |
 | Server | Fastify 5.12.7; cookie 11.1.3; static 10.1.6 |
 | Contracts | TypeBox 0.34.52; Ajv 8.20.0; ajv-formats 3.0.1 |
@@ -19,17 +19,16 @@ All direct versions are exact in `package.json`; `pnpm-lock.yaml` pins the resol
 | Metrics | OpenTelemetry API 1.9.1; SDK metrics 2.12.0; OTLP/HTTP metrics exporter 0.223.0 |
 | TypeScript tooling | TypeScript 7.0.2; tsx 4.23.15 |
 | Tests | Vitest 5.0.5; Playwright 1.64.1 with its paired Chromium 1248 |
-| Container DB | Official PostgreSQL 18-alpine image, immutable digest in Compose; not executed locally |
 
-License details for the pinned installed packages are generated in `DEPENDENCY_LICENSES.json`. This is an inventory, not legal approval. Production review must include transitive and container licenses, vulnerabilities and provenance.
+License details for the pinned installed packages are generated in `DEPENDENCY_LICENSES.json`. This is an inventory, not legal approval. Production review must include transitive dependency licenses, vulnerabilities and provenance.
 
-At the 2026-10-17 analytics checkpoint, `pnpm audit --prod --json` and `pnpm audit --json` reported zero known advisories for production and full installed dependency graphs. This is a point-in-time package-audit result, not a security certification or container scan.
+At the 2026-10-17 analytics checkpoint, `pnpm audit --prod --json` and `pnpm audit --json` reported zero known advisories for production and full installed dependency graphs. This is a point-in-time package-audit result, not a security certification or deployment scan.
 
 Primary documentation consulted:
 
-- [Fastify validation and serialization](https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/) — strict request validation; this repository explicitly disables coercion and silent additional-field removal.
-- [PGlite filesystem persistence](https://pglite.dev/docs/filesystems) — native filesystem-backed storage used for a runnable local mode without Docker.
-- [Node release schedule](https://github.com/nodejs/Release) — Node 24 container baseline.
-- [Playwright browser installation](https://playwright.dev/docs/browsers) — pinned package/browser pairing for the fixture runner and browser acceptance tests.
+- [Fastify validation and serialization](https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/) - strict request validation; this repository explicitly disables coercion and silent additional-field removal.
+- [PGlite filesystem persistence](https://pglite.dev/docs/filesystems) - native filesystem-backed storage used for a runnable local mode without a separate database server.
+- [Node release schedule](https://github.com/nodejs/Release) - Node 24 native runtime baseline.
+- [Playwright browser installation](https://playwright.dev/docs/browsers) - pinned package/browser pairing for the fixture runner and browser acceptance tests.
 
 No external analytics service, heatmap engine, replay library or paid hostname is required. No runtime CDN/fonts are used. [Journey intelligence](INTELLIGENCE.md) optionally uses a separate Python environment with PyTorch 2.15.0 and NumPy 2.5.5 for the repository's SASRec and EulerNet implementations (see `apps/intelligence/requirements.txt`). Ordinary analytics does not require it. RecBole is not a dependency; no upstream EulerNet source is vendored.

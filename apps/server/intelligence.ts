@@ -7,6 +7,7 @@ import type {Event} from '../../packages/contracts/events.js';
 import type {IntelligenceScope,IntelligenceDatasetQuery,SequenceDataset,SequenceScope,ModelManifest} from '../../packages/contracts/intelligence.js';
 import {Problem} from './security.js';
 import {config} from './config.js';
+import {fromRoot} from '../../packages/config/paths.js';
 
 export function sequenceScope(f:IntelligenceScope,page:any):SequenceScope {
  return {site_id:f.site_id,page_key:f.page_key,data_source:f.data_source,revision:f.revision,variant:f.variant,locale:page.locale,state:page.state,registry_hash:createHash('sha256').update(JSON.stringify([ [...page.elements].sort(),[...page.actions].sort() ])).digest('hex'),data_version:page.intelligence_version??'initial'};
@@ -55,13 +56,23 @@ export function modelDirectory(scope:IntelligenceScope) {
  const key=createHash('sha256').update(JSON.stringify([scope.site_id,scope.page_key,scope.data_source,scope.revision,scope.variant])).digest('hex');
  return path.join(config.dataDir,'intelligence',key);
 }
+export async function activeModelDirectory(directory:string){
+ try{
+  const pointer=JSON.parse(await readFile(path.join(directory,'active.json'),'utf8'));
+  if(!pointer||typeof pointer.run_id!=='string'||!/^[a-f0-9-]{36}$/.test(pointer.run_id))throw new Error('INVALID_MODEL_POINTER');
+  return path.join(directory,'versions',pointer.run_id);
+ }catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return directory;throw new Problem(503,'INTELLIGENCE_ARTIFACT_INVALID');}
+}
 export async function pruneIntelligence(dataDir:string,rawDays:number,versions?:Map<string,string>) {
  const root=path.join(dataDir,'intelligence');
  const entries=await readdir(root,{withFileTypes:true}).catch((e:NodeJS.ErrnoException)=>{if(e.code==='ENOENT')return [];throw e;});
  let pruned=0;
  for(const entry of entries){
   if(!entry.isDirectory()||!/^[a-f0-9]{64}$/.test(entry.name))continue;
-  const directory=path.join(root,entry.name);
+  const base=path.join(root,entry.name);
+  const versionEntries=await readdir(path.join(base,'versions'),{withFileTypes:true}).catch((e:NodeJS.ErrnoException)=>{if(e.code==='ENOENT')return [];throw e;});
+  const directories=[base,...versionEntries.filter(v=>v.isDirectory()&&/^[a-f0-9-]{36}$/.test(v.name)).map(v=>path.join(base,'versions',v.name))];
+  for(const directory of directories){
   let manifest:ModelManifest;
   try{manifest=JSON.parse(await readFile(path.join(directory,'manifest.json'),'utf8'));}catch{continue;}
   if(!manifest||typeof manifest!=='object')continue;
@@ -71,12 +82,14 @@ export async function pruneIntelligence(dataDir:string,rawDays:number,versions?:
    for(const file of ['model.pt','manifest.json'])await unlink(path.join(directory,file)).catch((e:NodeJS.ErrnoException)=>{if(e.code!=='ENOENT')throw e;});
    pruned++;
   }
+  }
  }
  return pruned;
 }
-export async function modelStatus(db:DB,f:IntelligenceScope,page:any):Promise<{status:'not_trained'|'expired'|'incompatible'}|{status:'ready';manifest:ModelManifest}> {
+export async function modelStatus(db:DB,f:IntelligenceScope,page:any,directory?:string):Promise<{status:'not_trained'|'expired'|'incompatible'}|{status:'ready';manifest:ModelManifest}> {
+ directory??=await activeModelDirectory(modelDirectory(f));
  let manifest:ModelManifest;
- try{manifest=JSON.parse(await readFile(path.join(modelDirectory(f),'manifest.json'),'utf8'));}
+ try{manifest=JSON.parse(await readFile(path.join(directory,'manifest.json'),'utf8'));}
  catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return {status:'not_trained'};throw new Problem(503,'INTELLIGENCE_ARTIFACT_INVALID');}
  const [site]=await db.query('SELECT intelligence_version FROM sites WHERE id=$1',[f.site_id]);
  const scope=sequenceScope(f,{...page,intelligence_version:site?.intelligence_version});
@@ -95,7 +108,7 @@ export async function modelStatus(db:DB,f:IntelligenceScope,page:any):Promise<{s
  if(page.environment!=='synthetic'&&(manifest.minimum_token_views<privacy.minimum_views||!Number.isInteger(manifest.minimum_token_views)||evaluation.test_sequences<privacy.minimum_views))return {status:'incompatible'};
  const oldest=Date.parse(manifest.oldest_started_at),expiry=Date.parse(manifest.expires_at);
  if(!Number.isFinite(oldest)||!Number.isFinite(expiry)||Date.now()>=Math.min(expiry,oldest+privacy.raw_days*86400000))return {status:'expired'};
- try{await stat(path.join(modelDirectory(f),'model.pt'));}catch{return {status:'not_trained'};}
+ try{await stat(path.join(directory,'model.pt'));}catch{return {status:'not_trained'};}
  return {status:'ready',manifest};
 }
 let inferenceBusy=false;
@@ -104,7 +117,7 @@ export async function runIntelligence(script:'sasrec.py'|'eulernet.py',directory
  inferenceBusy=true;
  try{
   return await new Promise<string>((resolve,reject)=>{
-   const child=execFile(config.intelligencePython,[path.resolve('apps/intelligence',script),'predict','--model-dir',directory],{timeout:15000,maxBuffer:65536,windowsHide:true},(error,stdout)=>error?reject(error):resolve(stdout));
+   const child=execFile(config.intelligencePython,[fromRoot('apps/intelligence',script),'predict','--model-dir',directory],{timeout:15000,maxBuffer:65536,windowsHide:true},(error,stdout)=>error?reject(error):resolve(stdout));
    child.stdin?.on('error',()=>{});child.stdin?.end(JSON.stringify(input));
   });
  }catch{throw new Problem(503,'INTELLIGENCE_INFERENCE_UNAVAILABLE');}finally{inferenceBusy=false;}
@@ -112,7 +125,7 @@ export async function runIntelligence(script:'sasrec.py'|'eulernet.py',directory
 export async function predictActions(scope:IntelligenceScope,history:string[],top_k:number,manifest:ModelManifest) {
  if(history.some(t=>!manifest.vocabulary.includes(t)))throw new Problem(422,'INTELLIGENCE_UNKNOWN_ACTION');
  try{
-  const stdout=await runIntelligence('sasrec.py',modelDirectory(scope),{history,top_k,model_id:manifest.model_id});
+  const stdout=await runIntelligence('sasrec.py',await activeModelDirectory(modelDirectory(scope)),{history,top_k,model_id:manifest.model_id});
   const result=JSON.parse(stdout);
   if(result.model_id!==manifest.model_id||!Array.isArray(result.rankings)||result.rankings.length>top_k||result.rankings.some((r:any)=>!manifest.vocabulary.includes(r.action)||!Number.isFinite(r.score)))throw new Error('INVALID_RESULT');
   return {model:'SASRec',...result,score_type:'ranking_logit',data_source:scope.data_source};

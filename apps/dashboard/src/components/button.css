@@ -1,0 +1,64 @@
+:where(.ui-button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid var(--border, #d7ddd8);
+  border-radius: 6px;
+  background: var(--surface-subtle, #f5f7f5);
+  color: var(--text-primary, #242923);
+  font: 600 12px/1.4 var(--font-body, Inter, Arial, sans-serif);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+:where(.ui-button):hover:enabled {
+  background: var(--surface-raised, #eaf0eb);
+  border-color: var(--text-muted, #a1afa6);
+}
+:where(.ui-button):focus-visible {
+  outline: 2px solid var(--orange, #d46137);
+  outline-offset: 2px;
+}
+:where(.ui-button):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+:where(.ui-button[data-variant='primary']) {
+  background: #d46137;
+  border-color: #d46137;
+  color: #fff;
+}
+:where(.ui-button[data-variant='primary']):hover:enabled {
+  background: #e07147;
+  border-color: #e07147;
+}
+:where(.ui-button[data-variant='text']),
+:where(.ui-button[data-variant='plain']) {
+  border-color: transparent;
+  background: transparent;
+  padding: 3px 0;
+  min-height: 28px;
+}
+:where(.ui-button[data-variant='text']) {
+  color: var(--text-accent, #ab380f);
+}
+:where(.ui-button[data-variant='icon']) {
+  width: 32px;
+  min-height: 32px;
+  padding: 6px;
+  flex-shrink: 0;
+}
+:where(.ui-button).full {
+  width: 100%;
+}
+:where(.ui-button) svg {
+  flex-shrink: 0;
+}
+
+.sidebar .ui-button.nav-item {
+  justify-content: flex-start;
+}

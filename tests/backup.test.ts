@@ -2,7 +2,7 @@ import {it,expect} from 'vitest';
 import {randomUUID} from 'node:crypto';
 import {mkdir,readFile,rm} from 'node:fs/promises';
 import path from 'node:path';
-import {spawnSync} from 'node:child_process';
+import {saveBackup,restoreBackup} from '../apps/server/backup-service.js';
 import sharp from 'sharp';
 import {openDB,migrate} from '../packages/db/index.js';
 import {seedRegistry} from '../apps/server/seed.js';
@@ -24,12 +24,12 @@ it('persists through reopen, backs up, and restores into an empty database with 
   const id=await importReference(db,source,{schema_version:1,site_id:'local-demo',page_key:'casino-halloween',revision:'demo-v1',locale:'en-GB',variant:'control',state:'public-default',captured_at:new Date().toISOString(),viewport:{width:240,height:200,dpr:1},document:{width:240,height:200},layer:'document',elements:[],masks:[],capture_policy_version:'test-v1'},buffer);
   const [original]=await db.query('SELECT * FROM page_references WHERE id=$1',[id]);await db.close();
   db=await openDB(undefined,source+'/database');expect((await db.query('SELECT * FROM events')).length).toBe(1);await db.close();
-  const run=(script:string,dataDir:string)=>spawnSync(process.execPath,['--import','tsx',script,backup],{cwd:process.cwd(),encoding:'utf8',timeout:30000,env:{...process.env,DATABASE_URL:'',DATA_DIR:dataDir,COLLECTOR_ORIGIN:'http://127.0.0.1:65530'}});
-  const backed=run('scripts/backup.ts',source);expect(backed.status,backed.stderr).toBe(0);
-  const restored=run('scripts/restore.ts',target);expect(restored.status,restored.stderr).toBe(0);
+  db=await openDB(undefined,source+'/database');await saveBackup(db,source,backup);await db.close();
+  db=await openDB(undefined,target+'/database');await restoreBackup(db,target,backup);await db.close();
   db=await openDB(undefined,target+'/database');expect((await db.query('SELECT * FROM events')).length).toBe(1);const [ref]=await db.query('SELECT * FROM page_references WHERE id=$1',[id]);expect(ref.manifest.image.sha256).toBe(original.manifest.image.sha256);expect(digest(await readFile(path.join(target,'references',ref.object_key)))).toBe(ref.manifest.image.sha256);await db.close();
   db=await openDB(undefined,target+'/database');expect((await db.query('SELECT id FROM experiments WHERE id=$1',[experiment.id]))).toHaveLength(1);expect((await db.query('SELECT visit_id FROM acquisition_outcomes WHERE visit_id=$1',[acquisition.visit_id]))).toHaveLength(1);expect((await db.query('SELECT result FROM installation_checks'))[0].result.pixel).toBe('detected');await db.close();
-  expect(run('scripts/restore.ts',target).status).not.toBe(0);
+  db=await openDB(undefined,target+'/database');await expect(restoreBackup(db,target,backup)).rejects.toThrow('RESTORE_REQUIRES_EMPTY_DATABASE');await db.close();
+  const occupied=await openDB(undefined,'memory://');try{await migrate(occupied);await occupied.query("INSERT INTO users(id,email,password_hash,role) VALUES('existing','existing@test.invalid','x','owner')");await expect(restoreBackup(occupied,target,backup)).rejects.toThrow('RESTORE_REQUIRES_EMPTY_DATABASE');}finally{await occupied.close();}
  }finally{
   await db.close().catch(()=>{});
   if(!base.startsWith(path.resolve('.local')+path.sep)||!path.basename(base).startsWith('recovery-test-'))throw new Error('UNSAFE_TEST_CLEANUP');

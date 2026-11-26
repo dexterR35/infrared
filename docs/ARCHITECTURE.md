@@ -25,13 +25,12 @@ trackinglandingpages/
   scripts/           Build, migration, admin, seed, capture, maintenance
   tests/             Contracts, ingestion, report cohorts, capture, recovery, browser
   config/            Disabled real-page example and scope fixtures
-  infra/             Local Docker packaging
   docs/              Installation, contracts, operations and release evidence
 ```
 
 ## Native local mode
 
-`pnpm start` launches the private dashboard/API on port 3000, collector on 8080, demo on 4173, and worker in one Node process. Each HTTP application has its own route set. This mode uses a single persistent PGlite owner because its filesystem database must not be opened concurrently by separate processes.
+`pnpm start` launches the private dashboard/API on port 3000, collector on 8080 and worker in one Node process. Each HTTP application has its own route set. This mode uses a single persistent PGlite owner because its filesystem database must not be opened concurrently by separate processes.
 
 The capture browser is always a separate child process. It receives a selected fixture, viewport and staging directory, plus a minimal environment. It receives no database connection or administrator credentials. The trusted parent validates and imports its image/manifest and leaves it pending review.
 
@@ -40,7 +39,7 @@ The capture browser is always a separate child process. It receives a selected f
 For a shared PostgreSQL database, the actual entry points are:
 
 ```text
-pnpm db:migrate        # privileged setup; schema + idempotent disabled registry seed
+pnpm db:migrate        # privileged setup; schema migrations only
 pnpm start:api        # private dashboard and management routes
 pnpm start:collector  # SDK/config/events/health allowlist
 pnpm start:worker     # bounded durable job processor
@@ -49,7 +48,7 @@ pnpm start:demo       # local public-page fixtures
 
 Run each service from its own terminal with the appropriate `DATABASE_URL`. Collector/API/worker reject standalone startup without it; they cannot accidentally race on the embedded database. Native `pnpm start` remains the simplest supported workstation mode.
 
-Separate entry points are implemented; independent PostgreSQL deployment and least-privilege role grants remain execution-unverified here because Docker/PostgreSQL are unavailable on this workstation. The supplied Compose file remains the combined local profile. The default does not expose any management or database port beyond loopback. Corporate authentication, public collection infrastructure, hardened capture of untrusted websites, and production role approval remain release gates.
+Separate entry points are implemented. Hosted PostgreSQL deployment and least-privilege role grants require separate validation. Local operation uses native Node and persistent PGlite. The default does not expose any management or database port beyond loopback. Corporate authentication, public collection infrastructure, hardened capture of untrusted websites, and production role approval remain release gates.
 
 ## Collection and processing
 

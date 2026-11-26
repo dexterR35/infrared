@@ -1,3 +1,9 @@
+import {isIP} from 'node:net';
+
+export function configuredBindHost(value='127.0.0.1'){
+  if(!isIP(value))throw new Error('BIND_HOST_MUST_BE_IP');
+  return value;
+}
 export function configuredOrigin(value:string,name:string) {
   let url:URL;
   try{url=new URL(value);}catch{throw new Error(name+'_INVALID_ORIGIN');}
@@ -5,7 +11,7 @@ export function configuredOrigin(value:string,name:string) {
   if(url.protocol==='http:'&&!['127.0.0.1','localhost','[::1]'].includes(url.hostname))throw new Error(name+'_HTTPS_REQUIRED');
   return value;
 }
-export const isLoopbackOrigin=(value:string)=>{try{return ['127.0.0.1','localhost','[::1]'].includes(new URL(value).hostname);}catch{return false;}};
+const isLoopbackOrigin=(value:string)=>{try{return ['127.0.0.1','localhost','[::1]'].includes(new URL(value).hostname);}catch{return false;}};
 // The synthetic demo site is approved and enabled by default, so it must never be pointed at a public host.
 export function loopbackOrigin(value:string,name:string) {
   const origin=configuredOrigin(value,name);if(!isLoopbackOrigin(origin))throw new Error(name+'_MUST_BE_LOOPBACK');return origin;

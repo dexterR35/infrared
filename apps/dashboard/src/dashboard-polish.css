@@ -17,7 +17,6 @@ body,.login,.boot { background: #fafafa; }
 .app { background: #fafafa; background-image: none; }
 .sidebar { background: #202321; color: #e7ece9; border-color: #343a36; }
 .workspace-brand .brand b,.brand small { color: #f4f7f5; }
-.sidebar .graphoria-mark { background: #fff; border-radius: 3px; padding: 3px; }
 .workspace { background: #282d29; border-color: #3c443e; border-radius: 6px; }
 .workspace b { color: #f2f5f3; }
 .workspace small { color: #c1cbc4; }
@@ -29,11 +28,7 @@ body,.login,.boot { background: #fafafa; }
 .nav-item.active svg { color: #ff9579; }
 .nav-item small { color: #e1e8e3; background: #4b554d; }
 .nav-group { border-color: #3a413b; }
-.local-box { background: #292f2a; border-color: #414a42; border-radius: 5px; }
-.local-box>div { color: #e5ece7; }
-.local-box p { color: #c1cbc4; }
-.local-box a { color: #ffa58e; }
-.local-box .badge { background: #444e46; color: #e9efeb; }
+
 .profile { border-color: #3a413b; }
 .profile b { color: #edf3ef; }
 .profile small,.sidebar .icon-btn { color: #c1cbc4; }
@@ -69,7 +64,7 @@ h2,.panel-header h2,.content-panel>h2,.login-card h2,.reference-history-heading 
 .login-story>.badge { background: #fff0ea; color: #963817; }
 .login-card h2 { font-size: 22px; }
 .login-card>.btn { font-family: var(--font-body); font-size: 13px; }
-.login-help code { background: #f7f9f7; border-color: #e6eae7; }
+
 @media(max-width:1200px) { .heading-actions .btn { font-size: 12px; } .page-heading h1 { font-size: 35px; } }
 @media(max-width:1100px) { .analytic-metrics.overview-metrics:has(>.analytic-metric:nth-child(4)) { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media(max-width:767px) {

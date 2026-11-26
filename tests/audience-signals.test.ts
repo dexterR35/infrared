@@ -45,7 +45,7 @@ describe('client info',()=>{
 
 describe('behaviour events',()=>{
  const post=(events:Event[],extra:Partial<ReturnType<typeof batch>>={})=>{const b={...batch(),...extra};b.events=events.map((e,i)=>({...e,seq:i}));return collector.app.inject({method:'POST',url:'/v1/events',headers:{origin:demoOrigin},payload:b});};
- const base=()=>{const {event_id,segment_id,viewport}=batch().events[0];return {event_id:randomUUID(),segment_id,viewport,elapsed_ms:200,seq:0};};
+ const base=()=>{const {segment_id,viewport}=batch().events[0];return {event_id:randomUUID(),segment_id,viewport,elapsed_ms:200,seq:0};};
  it('accepts every new signal through the real collector schema',async()=>{
   const b=base(),seg={segment_id:b.segment_id,viewport:b.viewport};
   const events=[

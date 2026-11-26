@@ -1,0 +1,124 @@
+.ui-modal {
+  box-sizing: border-box;
+  width: min(680px, calc(100% - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  border: 1px solid var(--border, #dedfd6);
+  border-radius: 16px;
+  background: var(--surface, #fff);
+  color: var(--text-primary, #242923);
+  box-shadow: 0 24px 90px #20251f30;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.ui-modal::backdrop {
+  background: #18211cb3;
+  backdrop-filter: blur(4px);
+}
+.ui-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 28px 28px 24px;
+  border-bottom: 1px solid var(--border, #e7e8e0);
+}
+.ui-modal-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+}
+.ui-modal-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border: 1px solid #f0d7ca;
+  border-radius: 12px;
+  background: #fff4ed;
+  color: #be431a;
+}
+.ui-modal-header h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  line-height: 1.4;
+}
+.ui-modal-header p {
+  margin: 7px 0 0;
+  color: var(--text-muted, #74786f);
+  font-size: 12px;
+  line-height: 1.7;
+  max-width: 440px;
+}
+.ui-modal-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted, #74786f);
+  cursor: pointer;
+}
+.ui-modal-close:hover {
+  background: var(--surface-subtle, #f4f5ef);
+}
+.ui-modal-close:focus-visible {
+  outline: 2px solid #ce491c;
+  outline-offset: 2px;
+}
+.ui-modal-close:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.landing-page-form {
+  padding: 24px 28px;
+}
+.landing-page-form > label,
+.landing-page-form .two-fields > label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 18px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.landing-page-form input:not([type='checkbox']) {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #dcded5);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+}
+.landing-page-form > label.check-row {
+  flex-direction: row;
+  align-items: flex-start;
+  font-size: 12px;
+  font-weight: 400;
+}
+@media (max-width: 600px) {
+  .ui-modal {
+    max-height: calc(100dvh - 24px);
+    width: calc(100% - 24px);
+    border-radius: 12px;
+  }
+  .ui-modal-header {
+    padding: 20px;
+  }
+  .ui-modal-header h2 {
+    font-size: 19px;
+  }
+  .ui-modal-icon {
+    display: none;
+  }
+}

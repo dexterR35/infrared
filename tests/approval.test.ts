@@ -10,7 +10,7 @@ import {config} from '../packages/config/index.js';
 let db:DB,app:ReturnType<typeof createManagement>,collector:ReturnType<typeof createCollector>,siteKey:string;
 const host={host:'127.0.0.1:3000'},origin='http://127.0.0.1:3000',tokens={owner:randomUUID(),administrator:randomUUID()};
 const as=(role:keyof typeof tokens)=>({...host,cookie:'ir_session='+tokens[role],origin,'x-csrf-token':'synthetic-csrf'});
-const realBatch=()=>{const b=batch();return {...b,site_key:siteKey,config_version:0,context:{...b.context,revision:'UNKNOWN'}};};
+const realBatch=()=>{const b=batch();return {...b,site_key:siteKey,config_version:0,consent:{analytics:true as const,policy_version:'cmp-2026-10'},context:{...b.context,revision:'UNKNOWN'}};};
 beforeAll(async()=>{
  db=await testDB();
  for(const role of ['owner','administrator'] as const){

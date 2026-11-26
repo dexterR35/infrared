@@ -5,7 +5,7 @@ import type {DB} from '../packages/db/index.js';
 import {createManagement} from '../apps/server/management.js';
 import {digest,passwordHash,Problem} from '../packages/security/index.js';
 import {safeScriptJSON,decodeReferenceBase64,validateSelector} from '../packages/security/validation.js';
-import {configuredOrigin,configuredPort} from '../packages/config/origins.js';
+import {configuredOrigin,configuredPort,configuredBindHost} from '../packages/config/origins.js';
 import {validCollectorOrigin,validSDKArtifact} from '../packages/domain/endpoint.js';
 import {importReference,referenceImage,type Manifest} from '../apps/server/references.js';
 let db:DB,app:ReturnType<typeof createManagement>,session='',csrf='';
@@ -50,6 +50,10 @@ it('rejects malformed selectors without a server error or creating a draft',asyn
 });
 it('encodes script JSON without executable HTML delimiters and preserves its data',()=>{
  const value={name:'</script><svg onload=alert(1)> & \u2028\u2029'};const encoded=safeScriptJSON(value);expect(encoded).not.toMatch(/[<>&\u2028\u2029]/);expect(JSON.parse(encoded)).toEqual(value);
+});
+it('uses loopback by default and validates an explicit native bind address',()=>{
+ expect(configuredBindHost()).toBe('127.0.0.1');expect(configuredBindHost('0.0.0.0')).toBe('0.0.0.0');expect(configuredBindHost('::1')).toBe('::1');
+ for(const value of ['','localhost/path','http://0.0.0.0','127.0.0.1;command'])expect(()=>configuredBindHost(value)).toThrow('BIND_HOST_MUST_BE_IP');
 });
 it('rejects malformed or noncanonical base64 before decoding an image',()=>{
  for(const value of ['', '!!!!','aGVsbG8','aGVsbG8=\n','data:image/png;base64,aGVsbG8='])expect(()=>decodeReferenceBase64(value)).toThrow('REFERENCE_ENCODING_INVALID');expect(decodeReferenceBase64('aGVsbG8=').toString()).toBe('hello');

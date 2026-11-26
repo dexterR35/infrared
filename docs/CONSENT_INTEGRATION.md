@@ -17,3 +17,5 @@ Private regions exclude entire subtrees and clicks intersecting their visible re
 The event store remains potentially personal data. Memory-only random IDs and aggregate reports do not establish anonymization. Network infrastructure processes connection metadata; the app uses transient salted source buckets and omits request bodies, cookies, raw IPs, raw referrers and full user-agent strings from application logs.
 
 Limits: pending browser work and in-flight delivery are best-effort; not all requests can be recalled. Browser privacy assertions can be forged by non-browser clients. No production integration has been verified.
+
+Consent policy binding: for real websites, the collector and the backend acquisition API accept consent only when its `policy_version` equals the version the owner recorded at approval (`CONSENT_POLICY_MISMATCH` otherwise). Re-approving with a new version invalidates snippets that still carry the old one; copy the updated snippet from the installation screen.

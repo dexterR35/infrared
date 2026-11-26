@@ -1,3 +1,5 @@
+> Historical specification: packaging requirements in this document have been superseded. The current runtime uses native Node.js with PGlite, or optional hosted PostgreSQL. See README.md for supported setup.
+
 # NetBet Heatmap Studio
 ## Full custom-build specification for Codex
 

@@ -15,6 +15,20 @@ export const intelligencePredictSchema=T.Object({...intelligenceScopeSchema.prop
 export type IntelligenceScope=Static<typeof intelligenceScopeSchema>;
 export type IntelligenceDatasetQuery=Static<typeof intelligenceDatasetSchema>;
 export type IntelligencePrediction=Static<typeof intelligencePredictSchema>;
+export const trainingSchema=T.Object({...intelligenceDatasetSchema.properties,
+ models:T.Array(T.Union([T.Literal('sasrec'),T.Literal('euler'),T.Literal('conversion')]),{minItems:1,maxItems:3,uniqueItems:true}),
+},{additionalProperties:false});
+export const trainingScheduleSchema=T.Object({...intelligenceScopeSchema.properties,
+ interval_hours:T.Union([T.Literal(0),T.Literal(24),T.Literal(168)]),
+ lookback_days:T.Integer({minimum:1,maximum:90}),
+},{additionalProperties:false});
+export const rollbackSchema=T.Object({...intelligenceScopeSchema.properties,
+ run_id:T.String({format:'uuid'}),
+},{additionalProperties:false});
+export type TrainingRequest=Static<typeof trainingSchema>;
+export type TrainingSchedule=Static<typeof trainingScheduleSchema>;
+export type TrainingPoint={phase:string;epoch:number;epochs:number;loss:number;validation_loss?:number;validation_ndcg?:number};
+export type TrainingRun={id:string;model:'sasrec'|'euler'|'conversion';status:'queued'|'running'|'completed'|'failed';progress:TrainingPoint[];manifest:(ModelManifest|EulerManifest)|null;error_code:string|null;created_at:string;finished_at:string|null};
 export const eulerPredictSchema=T.Object({...intelligenceScopeSchema.properties,
  history:intelligencePredictSchema.properties.history,
  device:T.Union([T.Literal('mobile'),T.Literal('tablet'),T.Literal('desktop')]),
@@ -33,10 +47,11 @@ export type ModelManifest={
  evaluation:{test_sequences:number;unknown_targets:number;k:number;sasrec:{hit_rate:number;ndcg:number};markov:{hit_rate:number;ndcg:number};popularity:{hit_rate:number;ndcg:number}};
 };
 export const eulerTarget='qualified_exposure_click_30s' as const;
+export const conversionTarget='qualified_exposure_primary_action_30s' as const;
 export const eulerFeatureNames=['element_id','device','previous_action','recent_clicks','recent_activations','recent_length'] as const;
 export type EulerFeatures=Record<typeof eulerFeatureNames[number],string>;
 export type EulerDataset={
- schema_version:1;model:'EulerNet';feature_schema_version:1;target:typeof eulerTarget;horizon_ms:30000;
+ schema_version:1;model:'EulerNet';feature_schema_version:1;target:typeof eulerTarget|typeof conversionTarget;horizon_ms:30000;primary_action_id?:string;
  environment:'synthetic'|'real';
  scope:SequenceScope;exported_at:string;expires_at:string;minimum_views:number;
  views:{started_at:string;ended_at:string;examples:{features:EulerFeatures;label:0|1}[]}[];
@@ -46,7 +61,7 @@ export type BinaryMetrics={log_loss:number;brier:number;ece:number;auc:number|nu
 export type EulerManifest={
  schema_version:1;model:'EulerNet';model_id:string;scope:SequenceScope;created_at:string;expires_at:string;oldest_started_at:string;
  environment:'synthetic'|'real';
- feature_schema_version:1;target:typeof eulerTarget;horizon_ms:30000;minimum_views:number;
+ feature_schema_version:1;target:typeof eulerTarget|typeof conversionTarget;horizon_ms:30000;minimum_views:number;primary_action_id?:string;
  vocabulary:Record<typeof eulerFeatureNames[number],string[]>;
  evaluation:{test_views:number;test_examples:number;positives:number;negatives:number;eulernet:BinaryMetrics;logistic:BinaryMetrics;constant:BinaryMetrics};
  validation_state:'fixture_only'|'needs_review'|'passes_offline_checks';

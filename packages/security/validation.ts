@@ -15,8 +15,8 @@ export const reportQuerySchema=T.Object({
   channel:T.Optional(oneOf(channels)),browser:T.Optional(oneOf(browsers)),os:T.Optional(oneOf(systems)),client_device:T.Optional(oneOf(['mobile','tablet','desktop'])),country:T.Optional(T.String({pattern:'^[A-Z]{2}$'})),
 },{additionalProperties:false});
 export const installQuerySchema=T.Object({site_id:code,page_key:code},{additionalProperties:false});
-export const portfolioQuerySchema=T.Omit(reportQuerySchema,['site_id','page_key','width','revision','reference_id','mapping','experiment_id','channel','browser','os','client_device','country']);
-export const pagePolicySchema=T.Object({revision:T.Optional(code),campaign_codes:T.Array(code,{minItems:1,maxItems:32,uniqueItems:true}),diagnostics_enabled:T.Boolean(),diagnostic_error_codes:T.Array(code,{maxItems:16,uniqueItems:true}),primary_cta_id:code,primary_action_id:code},{additionalProperties:false});
+export const portfolioQuerySchema=T.Partial(T.Omit(reportQuerySchema,['page_key','width','revision','reference_id','mapping','experiment_id','channel','browser','os','client_device','country']));
+export const pagePolicySchema=T.Object({revision:T.Optional(code),campaign_codes:T.Array(code,{minItems:1,maxItems:32,uniqueItems:true}),diagnostics_enabled:T.Boolean(),diagnostic_error_codes:T.Array(code,{maxItems:16,uniqueItems:true}),primary_cta_id:T.Union([code,T.Literal('')]),primary_action_id:T.Union([code,T.Literal('')])},{additionalProperties:false});
 export const operationSettingsSchema=T.Object({automatic_retention:T.Boolean(),retention_hour_utc:T.Integer({minimum:0,maximum:23}),automatic_backup:T.Boolean(),backup_hour_utc:T.Integer({minimum:0,maximum:23}),backup_days:T.Integer({minimum:1,maximum:90}),queue_warning_seconds:T.Integer({minimum:10,maximum:3600}),rejection_warning_percent:T.Integer({minimum:1,maximum:100})},{additionalProperties:false});
 
 export function validateSelector(s:Selector) {

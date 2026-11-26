@@ -15,6 +15,11 @@ const db=await openDB(undefined,config.dataDir+'/database');await migrate(db);aw
 // Additional matured exposure windows are explicit synthetic fixtures in the
 // disposable model-test profile, never generated into recorded activity.
 if(process.env.INFRARED_INTELLIGENCE_PYTHON)await seedEulerViews(db);
+// Explicit synthetic scope for intelligence browser tests. Production bootstrap
+// deliberately hides samples; the test browser opts into this fixture only.
+const [intelligenceSite]=await db.query("SELECT * FROM sites WHERE id='local-demo'");
+const intelligencePages=await db.query("SELECT * FROM pages WHERE site_id='local-demo' ORDER BY page_key");
+await writeFile(path.join(config.dataDir,'intelligence-scope.json'),JSON.stringify({sites:[intelligenceSite],pages:intelligencePages}));
 const credentials={email:'browser-tests@local.invalid',password:token()};await db.query("INSERT INTO users(id,email,password_hash,role) VALUES('browser-owner',$1,$2,'owner')",[credentials.email,await passwordHash(credentials.password)]);await writeFile(path.join(config.dataDir,'admin-credentials.json'),JSON.stringify(credentials),{mode:0o600,flag:'wx'});
 // Disposable, explicit E2E fixture only: new journeys reuse a scoped authenticated
 // session so expanding the suite cannot exhaust the real login rate limiter.

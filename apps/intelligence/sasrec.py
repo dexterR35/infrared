@@ -208,18 +208,29 @@ def train(args):
     popularity, transitions = baseline_counts(train_set, token_ids)
     k = min(5, len(vocabulary) - 1)
     best, best_state, best_epoch = -1, None, 0
+    history = []
     for epoch in range(args.epochs):
         model.train()
         random.shuffle(windows)
+        total_loss, examples = 0.0, 0
         for start in range(0, len(windows), 64):
             x, y = batch_tensors(windows[start:start + 64])
             optimizer.zero_grad()
             loss = F.cross_entropy(model(x).reshape(-1, len(vocabulary) + 1), y.reshape(-1), ignore_index=0)
+            if not torch.isfinite(loss):
+                raise ValueError("Nonfinite training loss; no checkpoint was published")
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 5)
             optimizer.step()
+            total_loss += float(loss.detach()) * int((y != 0).sum())
+            examples += int((y != 0).sum())
         validation_metrics = evaluate(model, validation, token_ids, popularity, transitions, k)
         score = validation_metrics["sasrec"]["ndcg"]
+        point = dict(phase="sasrec", epoch=epoch + 1, epochs=args.epochs,
+                     loss=total_loss / examples, validation_ndcg=score)
+        history.append(point)
+        if getattr(args, "progress", False):
+            print(json.dumps(dict(event="progress", **point), allow_nan=False), flush=True)
         if score > best:
             best, best_epoch = score, epoch + 1
             best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
@@ -235,8 +246,8 @@ def train(args):
                                   unsupported_training_sequences=original_training_count - len(train_set),
                                   windows=len(windows), best_epoch=best_epoch, seed=args.seed,
                                   split="chronological whole-view 70/15/15 with overlap purge",
-                                  minimum_token_views=dataset["minimum_token_views"]))
-    directory = Path(args.data_dir) / "intelligence" / scope_key(dataset["scope"])
+                                  minimum_token_views=dataset["minimum_token_views"], history=history))
+    directory = Path(args.output_dir) if getattr(args, "output_dir", None) else Path(args.data_dir) / "intelligence" / scope_key(dataset["scope"])
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     weights_tmp, manifest_tmp = directory / (model_id + ".pt.tmp"), directory / (model_id + ".json.tmp")
     with os.fdopen(os.open(weights_tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as output:
@@ -245,6 +256,8 @@ def train(args):
         output.write(json.dumps(manifest, indent=2, allow_nan=False))
     os.replace(weights_tmp, directory / "model.pt")
     os.replace(manifest_tmp, directory / "manifest.json")
+    if not getattr(args, "output_dir", None):
+        (directory / "active.json").unlink(missing_ok=True)
     print(json.dumps({"model_directory": str(directory), "evaluation": evaluation, "model_id": model_id}))
 
 
@@ -286,6 +299,8 @@ def main():
     training.add_argument("--max-length", type=int, default=50)
     training.add_argument("--hidden", type=int, default=64)
     training.add_argument("--seed", type=int, default=2026)
+    training.add_argument("--output-dir")
+    training.add_argument("--progress", action="store_true")
     prediction = commands.add_parser("predict")
     prediction.add_argument("--model-dir", required=True)
     args = parser.parse_args()

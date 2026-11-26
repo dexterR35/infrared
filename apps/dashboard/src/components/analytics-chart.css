@@ -1,0 +1,173 @@
+/* Plot controls only. Card shells live in card.css; fields and tables own their CSS. */
+.chart-canvas {
+  width: 100%;
+  height: 205px;
+  min-width: 0;
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0 0 12px;
+}
+.chart-legend button {
+  border: 0;
+  padding: 5px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  text-align: left;
+}
+.chart-legend button[aria-pressed='false'] {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.chart-legend button[aria-pressed='false'] i {
+  opacity: 0.35;
+}
+.chart-legend i,
+.chart-tooltip i {
+  height: 9px;
+  width: 9px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.chart-tooltip {
+  padding: 12px 14px;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 7px;
+  background: var(--surface, #fff);
+  box-shadow: 0 4px 18px #0003;
+  min-width: 180px;
+  max-width: 340px;
+  color: var(--text-primary);
+  font-size: 11px;
+}
+.chart-tooltip > strong {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.chart-tooltip > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+.chart-tooltip span {
+  flex: 1;
+}
+.chart-tooltip b {
+  font-weight: 600;
+}
+.chart-axis-note {
+  font-size: 10px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin: 8px 0 15px;
+}
+.chart-style {
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--border, #dbe1e8);
+  background: var(--surface-subtle, #f8fafc);
+  border-radius: 6px;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.chart-style button {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.chart-style button[aria-pressed='true'] {
+  background: var(--surface-raised, #fff);
+  color: var(--text-accent);
+  font-weight: 600;
+}
+.chart-controls {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.chart-controls > .form-field {
+  min-width: 180px;
+  max-width: 280px;
+}
+.chart-empty {
+  padding: 29px 15px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border, #cbd5e1);
+  border-radius: 7px;
+  background: var(--surface-subtle, #fafbfc);
+  line-height: 1.8;
+}
+.chart-page-picker {
+  margin-top: 28px;
+  position: relative;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.chart-page-picker summary {
+  cursor: pointer;
+  font-weight: 550;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #dbe1e8);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+}
+.chart-page-picker > div {
+  max-height: 240px;
+  overflow: auto;
+  padding: 12px 0;
+}
+.chart-page-picker label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  line-height: 1.7;
+}
+.chart-page-picker input {
+  accent-color: var(--text-accent);
+}
+.chart-page-picker small,
+.chart-page-picker p {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+@media (max-width: 767px) {
+  .chart-canvas {
+    height: 185px;
+  }
+  .chart-legend {
+    gap: 6px 12px;
+  }
+  .chart-controls {
+    gap: 12px;
+  }
+  .chart-page-picker {
+    margin-top: 0;
+    width: 100%;
+  }
+  .chart-style button {
+    padding: 6px 9px;
+  }
+  .chart-tooltip {
+    max-width: 240px;
+  }
+  .chart-page-picker label {
+    flex-wrap: wrap;
+  }
+}

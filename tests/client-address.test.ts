@@ -23,6 +23,19 @@ it('ignores malformed forwarded addresses',()=>{
  (config as any).trustedEdge='cloudflare';
  expect(clientAddress(req('127.0.0.1',{'cf-connecting-ip':'not-an-ip, 1.2.3.4'}))).toBe('127.0.0.1');
 });
+it('uses the nearest untrusted X-Forwarded-For hop behind a declared reverse proxy',()=>{
+ (config as any).trustedEdge='proxy';
+ expect(clientAddress(req('127.0.0.1',{'x-forwarded-for':'203.0.113.9'}))).toBe('203.0.113.9');
+ // A visitor cannot pick its address by prepending its own forwarded entries.
+ expect(clientAddress(req('127.0.0.1',{'x-forwarded-for':'1.1.1.1, 203.0.113.9'}))).toBe('203.0.113.9');
+ setTrustedProxies('10.0.0.0/8');
+ expect(clientAddress(req('127.0.0.1',{'x-forwarded-for':'203.0.113.9, 10.0.0.5'}))).toBe('203.0.113.9');
+ // Direct callers, malformed chains and Cloudflare headers are ignored in this mode.
+ expect(clientAddress(req('198.51.100.7',{'x-forwarded-for':'203.0.113.9'}))).toBe('198.51.100.7');
+ expect(clientAddress(req('127.0.0.1',{'x-forwarded-for':'203.0.113.9, junk'}))).toBe('127.0.0.1');
+ expect(clientAddress(req('127.0.0.1',{'cf-connecting-ip':'203.0.113.9'}))).toBe('127.0.0.1');
+ expect(edgeCountry(req('127.0.0.1',{'cf-ipcountry':'RO'}))).toBeNull();
+});
 it('rejects invalid proxy configuration',()=>{
- for(const value of ['example.com','10.0.0.0/33','::1/129'])expect(()=>trustedProxies(value)).toThrow('TRUSTED_PROXIES_INVALID');
+ for(const value of ['example.com','10.0.0.0/33','::1/129','10.0.0.0/','10.0.0.0/12/extra','10.0.0.0/ 0','10.0.0.0/+0','10.0.0.0/00','::1/'])expect(()=>trustedProxies(value)).toThrow('TRUSTED_PROXIES_INVALID');
 });

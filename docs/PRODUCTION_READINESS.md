@@ -1,24 +1,20 @@
 # Release decision
 
-**Current: LOCAL_DEMO. Real-site collection and external capture are disabled in code.**
+**Current: production-capable, self-hosted.** Real-site collection works once `RELEASE_STATUS=PRODUCTION`, HTTPS dashboard and collector origins are configured, an owner approves each website with its consent policy version, and the snippet is installed. Synthetic fixtures are refused in production. Setup steps are in the [README](../README.md#install-on-a-server-production).
 
-The 0.4.0 acquisition/experiment features are implemented locally. Production also requires a reviewed host unit-token/consent adapter, backend-only secret storage and rotation, completed-outcome definitions, attribution windows and delayed-event handling, spend/coverage reconciliation, experiment variant deployment and an A/A validation on each integration. The local lab and generated examples establish no real customer acquisition result. Portfolio and per-view reports still have explicit bounded query budgets; validate an appropriate production capacity envelope. See [ACQUISITION_EXPERIMENTS.md](ACQUISITION_EXPERIMENTS.md).
+Verified in this repository: strict type checking, 38 unit/integration test files (231 tests), production build, SDK integrity and size budget, dependency audit with no known vulnerabilities, and a production-mode start (HSTS, Secure cookies, Host enforcement, project-root path resolution, reverse-proxy client addresses).
 
-The seven original capabilities and the six analytics upgrades are implemented as a persistent, tested local application (see [analytics upgrade](ANALYTICS_UPGRADE.md)). The supplied 40-section specification defines a substantially larger production program. This repository does not claim that program is finished.
+Not verified here, and recommended before handling real visitor data at scale:
 
-Before a staged or real-data release, complete and evidence:
+- Your server, DNS, certificates and reverse proxy (run `pnpm verify:links` against the deployed hostnames and check the installation screen on a real page).
+- Restore drills from off-server backups, and PostgreSQL point-in-time recovery if you use hosted PostgreSQL.
+- Load and capacity for your traffic. Rate limits are per process; add gateway limits when running several collector replicas.
+- Your consent manager integration and privacy review for each website (CMP, retention, CSP, private regions).
+- Browser coverage beyond Chromium (Safari, Firefox) on your actual website.
+- Single sign-on/MFA if your organisation requires it. The built-in sign-in uses Argon2id passwords and sessions.
+- Least-privilege database accounts when collector, API and worker run as separate services.
+- External screenshot capture stays restricted to local fixtures; upload reviewed reference layouts instead.
 
-- Supported Node 24 LTS patch and pinned container validation on approved infrastructure; actual PostgreSQL tests and restore/PITR exercises.
-- Separate collector, management and worker runtime accounts with least-privilege grants, plus appropriate process/container and network isolation. The demo uses a single DB account.
-- Company-approved OIDC/MFA and remote management entry point, HTTPS cookies and certificates, account lifecycle and permission administration.
-- Exact-origin/page approvals, market assignment, public-context readiness, CMP integration, owners, CSP, verified final destination and retention/privacy review for every selected page.
-- Public HTTPS collection endpoint with reviewed gateway/edge request limits, infrastructure log minimization, shared multi-replica rate controls, anomaly/incident operations and a measured capacity envelope.
-- Configuration lifecycle compatibility across upgrades, stronger schema migrations/rollback tooling, immutable release provenance and dependency/container scanning in CI.
-- Production approval of data deletion/export expiry, backup access/encryption/offsite expiry and the implemented operational retention/backup schedules. Validate the implemented worker backoff/failed-job recovery under production faults and load.
-- A reviewed non-root browser sandbox and constrained egress before permitting capture of any non-fixture URL.
-- Wider adversarial, performance, recovery, accessibility and deployment testing. Current browser evidence covers Chromium only; Safari/Firefox and actual customer integrations are unverified.
-- Optional advanced portfolio hierarchy, registry import dry-runs, explicit page groups, live rollout approval records if required for the release scope. Element-relative mapping is now implemented locally.
+Acquisition and experiment features additionally need a backend integration on your website (integration key, consent, unit tokens, outcome definitions and spend reconciliation). See [ACQUISITION_EXPERIMENTS.md](ACQUISITION_EXPERIMENTS.md).
 
-Do not enable real collection by changing SQL flags. The collector rejects non-synthetic properties independently. Approval is a release decision supported by evidence; this document grants none.
-
-The local security audit and applied fixes are recorded in [SECURITY_AUDIT.md](SECURITY_AUDIT.md). `pnpm verify:links` checks local application routes and generated SDK integrity. It does not verify production DNS, certificates or redirects. No actual production collector/management hostname has been supplied or configured.
+Security reviews: [AUDIT-2026-11-25.md](AUDIT-2026-11-25.md), [SECURITY_AUDIT.md](SECURITY_AUDIT.md), [THREAT_MODEL.md](THREAT_MODEL.md). They reduce risk; they do not certify a deployment.

@@ -8,6 +8,7 @@ import type { DB } from '../../packages/db/index.js';
 import { viewportWidth } from '../../packages/contracts/viewport.js';
 import { importReference, manifestSchema, type Manifest } from './references.js';
 import { audit, Problem } from './security.js';
+import {fromRoot,projectRoot} from '../../packages/config/paths.js';
 
 interface Plan {site_id:string; page_key:string; campaign:string; origin:string; width:number; height:number;variant:string;treatment:boolean}
 type Runner = (plan:Plan, directory:string, signal:AbortSignal) => Promise<void>;
@@ -15,8 +16,8 @@ const ajv = new Ajv({coerceTypes:false,removeAdditional:false}); addFormats(ajv)
 const validManifest = ajv.compile(manifestSchema);
 
 const runFixture: Runner = async (plan,directory,signal) => {
-  const child = spawn(process.execPath, ['--import','tsx','scripts/capture-runner.ts',directory,plan.origin,plan.campaign,String(plan.width),String(plan.height),plan.variant,plan.treatment?'treatment':'control'], {
-    cwd:process.cwd(), stdio:'ignore', windowsHide:true, signal,
+  const child = spawn(process.execPath, ['--import','tsx',fromRoot('scripts/capture-runner.ts'),directory,plan.origin,plan.campaign,String(plan.width),String(plan.height),plan.variant,plan.treatment?'treatment':'control'], {
+    cwd:projectRoot, stdio:'ignore', windowsHide:true, signal,
     env:{PATH:process.env.PATH,SystemRoot:process.env.SystemRoot,USERPROFILE:process.env.USERPROFILE,TEMP:process.env.TEMP,TMP:process.env.TMP,LOCALAPPDATA:process.env.LOCALAPPDATA},
   });
   await new Promise<void>((resolve,reject) => {

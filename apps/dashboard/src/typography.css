@@ -10,14 +10,12 @@
 }
 
 .page-table td,
-.element-report td,
-.audit-table td {
+.element-report td{
   color: var(--text-secondary);
 }
 
 .page-heading p,
-.content-panel > p,
-.onboarding-card p {
+.content-panel > p{
   font-size: 13px;
 }
 

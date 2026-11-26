@@ -1,0 +1,43 @@
+.ui-collapsible {
+  min-width: 0;
+  border-top: 1px solid var(--line, #e6e8e7);
+}
+.ui-collapsible > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 20px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--text-secondary, #373737);
+  font-size: 12px;
+}
+.ui-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+.ui-collapsible > summary strong {
+  font-size: inherit;
+  font-weight: 500;
+}
+.ui-collapsible > summary span {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted, #595954);
+}
+.ui-collapsible > summary > svg {
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.ui-collapsible[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.ui-collapsible > summary:focus-visible {
+  outline: 2px solid var(--text-accent, #ab380f);
+  outline-offset: -3px;
+}
+.ui-collapsible-content {
+  min-width: 0;
+}

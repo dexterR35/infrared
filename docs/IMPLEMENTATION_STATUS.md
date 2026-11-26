@@ -1,4 +1,8 @@
-# Implementation status — 2026-10-17
+# Current runtime update - 25 November 2026
+
+Container packaging was removed at the owner's request. Use native Node.js with persistent PGlite locally, or optional hosted PostgreSQL/Supabase. The chronological checkpoints below describe earlier implementations and are not current setup instructions. See README.md.
+
+# Implementation status - 2026-10-17
 
 ## Acquisition and experimentation · 0.4.0
 
@@ -31,22 +35,22 @@ The user requested a tracking SDK, secure event API, persistent database, aligne
 | Heatmaps/dashboard | React/Vite UI; page/date/device/exact-width filters; custom Canvas density kernel; scroll/element overlays; isolated page comparisons; reference library; coverage; CSV and annotated PNG |
 | Privacy/auth | Consent and eligibility teardown; no tracking cookies/storage; forms/private regions excluded; Argon2id administrator; hashed opaque sessions; CSRF/Host/Origin checks; role/membership enforcement; retention and kill switches |
 | Marketing | Page-scoped bridge, real built artifact/SRI, exact scope preview, CSP and consent/context examples, verification steps and rollback; real install export visibly blocked |
-| Operations | Native diagnostics, seed, reference capture/import, scheduled and offline retention, verified logical backup and empty-database restore; pinned Docker/Compose files and CI workflow supplied |
+| Operations | Native diagnostics, seed, reference capture/import, scheduled and offline retention, verified logical backup and empty-database restore; native setup commands and CI workflow supplied |
 
 ## Commands actually run
 
-- `pnpm install --frozen-lockfile` — succeeded after enabling only esbuild's declared build hook.
-- `pnpm typecheck` — succeeded.
-- `pnpm test` — 58 checks passed across 8 files, including a persistent reopen and logical backup/restore roundtrip with reference checksum verification.
-- `pnpm build` — succeeded; SDK measured approximately **4.4 KiB gzip**, below the 35 KiB target. Consult `dist/sdk/artifact.json` for the current exact size/hash.
-- `pnpm admin bootstrap-local` — unique randomly generated local administrator; secret stored in ignored `.local/admin-credentials.json` and not printed.
-- `pnpm seed` — 210 persisted synthetic views; real NetBet candidate remained disabled.
-- `pnpm start` — dashboard, collector and demo bound to loopback.
-- `pnpm exec playwright install chromium` — installed the browser matching the pinned Playwright package.
-- `pnpm capture` — four approved synthetic references imported. An initial footer geometry mismatch was fixed and capture re-run successfully.
-- `pnpm test:e2e` — 11 Chromium browser checks passed: authentication, Canvas pixels, desktop/mobile geometry, dialog scope preview, no pre-consent network, unselected campaigns, withdrawal, query-only invalidation, private regions, keyboard activation without fake coordinates, and unauthenticated API rejection. The added keyboard check caught a zero-size private-region edge case; the SDK was corrected and rechecked.
-- `pnpm run doctor` and `pnpm release:check` — local diagnostics and explicit local-release checks succeeded. Production gates remain unverified.
-- `pnpm audit --prod --json` — zero reported known advisories at this checkpoint.
+- `pnpm install --frozen-lockfile` - succeeded after enabling only esbuild's declared build hook.
+- `pnpm typecheck` - succeeded.
+- `pnpm test` - 58 checks passed across 8 files, including a persistent reopen and logical backup/restore roundtrip with reference checksum verification.
+- `pnpm build` - succeeded; SDK measured approximately **4.4 KiB gzip**, below the 35 KiB target. Consult `dist/sdk/artifact.json` for the current exact size/hash.
+- `pnpm admin bootstrap-local` - unique randomly generated local administrator; secret stored in ignored `.local/admin-credentials.json` and not printed.
+- `pnpm seed` - 210 persisted synthetic views; real NetBet candidate remained disabled.
+- `pnpm start` - dashboard, collector and demo bound to loopback.
+- `pnpm exec playwright install chromium` - installed the browser matching the pinned Playwright package.
+- `pnpm capture` - four approved synthetic references imported. An initial footer geometry mismatch was fixed and capture re-run successfully.
+- `pnpm test:e2e` - 11 Chromium browser checks passed: authentication, Canvas pixels, desktop/mobile geometry, dialog scope preview, no pre-consent network, unselected campaigns, withdrawal, query-only invalidation, private regions, keyboard activation without fake coordinates, and unauthenticated API rejection. The added keyboard check caught a zero-size private-region edge case; the SDK was corrected and rechecked.
+- `pnpm run doctor` and `pnpm release:check` - local diagnostics and explicit local-release checks succeeded. Production gates remain unverified.
+- `pnpm audit --prod --json` - zero reported known advisories at this checkpoint.
 
 Browser evidence is under `.local/evidence/landing-pages.png`, `heatmap-desktop.png`, and `heatmap-mobile.png`. These contain synthetic data. Reference source artifacts are under `.local/staging`; approved private images are in `.local/references`.
 
@@ -117,7 +121,7 @@ Added default dark workspace and login surfaces, bright readable text, light/dar
 
 ## White workspace redesign · 2026-10-17
 
-The user's latest white-only direction supersedes the dark-theme checkpoint. Removed the theme toggle and dark styles, reset older saved dark preferences, and introduced a white/warm-neutral workspace with stronger black text, orange brand accents and distinct chart colors. Graphoria provided the visual reference; Vercel's interface guidelines informed spacing, hierarchy, focus and disclosure.
+The user's latest white-only direction supersedes the dark-theme checkpoint. Removed the theme toggle and dark styles, reset older saved dark preferences, and introduced a white/warm-neutral workspace with stronger black text, orange brand accents and distinct chart colors. The previous publisher branding provided the visual reference; Vercel's interface guidelines informed spacing, hierarchy, focus and disclosure.
 
 The campaign Overview now presents three metrics, one trend chart and a shorter table. Device/CTA/experience comparisons, detailed metrics, heatmap element reporting and quality detail are opened on demand. Navigation has four primary destinations plus Analysis/Manage groups. Mobile menus retain labels and support selection, outside-click and Escape dismissal; hash navigation handles browser back/forward. Suppressed reports have explicit empty states and unavailable headline values.
 
@@ -127,7 +131,7 @@ Final verification: typecheck and build pass, **108 unit/integration tests and 2
 
 ## Dashboard branding and TanStack tables · 2026-10-17
 
-Applied the user's revised direction: the original Graphoria logo alone, a white canvas with no cream grid, a charcoal sidebar, Inter for every dashboard label and heading, and restrained orange accents. Original logo/Inter assets are self-hosted. The condensed display face and affiliation byline were removed.
+Applied the user's revised direction: the original publisher logo alone, a white canvas with no cream grid, a charcoal sidebar, Inter for every dashboard label and heading, and restrained orange accents. Original logo/Inter assets are self-hosted. The condensed display face and affiliation byline were removed.
 
 Added TanStack Table 9.3.1 across registry, campaign, element, chart-data, audit and maintenance tables. Shared sorting and pagination apply to complete API datasets. Growing histories use new owner-only paginated endpoints with exact counts, snapshot boundaries, unique sort tie-breakers, strict query validation and bound SQL values. Requests discard superseded responses; filters and page-size changes reset pages. [TABLES.md](TABLES.md) records API parameters, client/server boundaries and validation limits.
 

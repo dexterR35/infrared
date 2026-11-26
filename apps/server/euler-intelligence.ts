@@ -3,16 +3,17 @@ import {readFile,stat} from 'node:fs/promises';
 import path from 'node:path';
 import type {DB} from '../../packages/db/index.js';
 import type {Event} from '../../packages/contracts/events.js';
-import {eulerFeatureNames,eulerTarget,type EulerDataset,type EulerManifest,type EulerPrediction,type IntelligenceDatasetQuery,type IntelligenceScope} from '../../packages/contracts/intelligence.js';
+import {eulerFeatureNames,eulerTarget,conversionTarget,type EulerDataset,type EulerManifest,type EulerPrediction,type IntelligenceDatasetQuery,type IntelligenceScope} from '../../packages/contracts/intelligence.js';
 import {eulerFeatures} from '../../packages/domain/click-prediction.js';
 import {deviceForWidth} from '../../packages/domain/metrics.js';
 import {Problem} from './security.js';
-import {actionToken,sequenceScope,runIntelligence} from './intelligence.js';
+import {actionToken,sequenceScope,runIntelligence,activeModelDirectory} from './intelligence.js';
 import {config} from './config.js';
 
-export const eulerDirectory=(scope:IntelligenceScope)=>path.join(config.dataDir,'intelligence',createHash('sha256').update(JSON.stringify(['EulerNet',scope.site_id,scope.page_key,scope.data_source,scope.revision,scope.variant])).digest('hex'));
+export const eulerDirectory=(scope:IntelligenceScope,objective:'euler'|'conversion'='euler')=>path.join(config.dataDir,'intelligence',createHash('sha256').update(JSON.stringify([objective==='conversion'?'EulerNetConversion':'EulerNet',scope.site_id,scope.page_key,scope.data_source,scope.revision,scope.variant])).digest('hex'));
 
-export async function exportClickExamples(db:DB,f:IntelligenceDatasetQuery,page:any):Promise<EulerDataset> {
+export async function exportClickExamples(db:DB,f:IntelligenceDatasetQuery,page:any,objective:'euler'|'conversion'='euler'):Promise<EulerDataset> {
+ if(objective==='conversion'&&(!page.primary_action_id||!page.actions.includes(page.primary_action_id)))throw new Problem(422,'INTELLIGENCE_PRIMARY_CONVERSION_ACTION_REQUIRED');
  const now=Date.now(),from=Date.parse(f.from+'T00:00:00Z'),to=Date.parse(f.to+'T00:00:00Z')+86400000;
  if(!Number.isFinite(from)||!Number.isFinite(to)||to<=from||to-from>90*86400000)throw new Problem(400,'INTELLIGENCE_DATE_RANGE_INVALID');
  const [{value:privacy}]=await db.query("SELECT value FROM settings WHERE key='privacy'");
@@ -46,6 +47,7 @@ export async function exportClickExamples(db:DB,f:IntelligenceDatasetQuery,page:
    const e=events[i];
    if(e.type==='exposure'&&e.first_qualified&&page.elements.includes(e.element_id)&&!seen.has(e.element_id)){
     seen.add(e.element_id);
+    if(objective==='conversion'&&tokens.includes('activation:'+page.primary_action_id))continue;
     const deadline=e.elapsed_ms+30000;
     const interrupted=events.slice(i+1).some(next=>next.elapsed_ms<=deadline&&next.type==='exit'&&next.kind==='hidden');
     let observedUntil=e.elapsed_ms,observationGap=false;
@@ -56,7 +58,7 @@ export async function exportClickExamples(db:DB,f:IntelligenceDatasetQuery,page:
     // Apply the same observation eligibility to positive AND negative labels.
     if(last<deadline||interrupted||observationGap){exclusions.censored_exposures++;}
     else{
-     const clicked=events.slice(i+1).some(next=>next.elapsed_ms<=deadline&&next.type==='click'&&next.target?.element_id===e.element_id);
+     const clicked=events.slice(i+1).some(next=>next.elapsed_ms<=deadline&&(objective==='conversion'?next.type==='activation'&&next.action_id===page.primary_action_id:next.type==='click'&&next.target?.element_id===e.element_id));
      const features=eulerFeatures([...tokens.slice(-49),'exposure:'+e.element_id],deviceForWidth(e.viewport.width));
      examples.push({features,label:clicked?1:0});
     }
@@ -68,18 +70,20 @@ export async function exportClickExamples(db:DB,f:IntelligenceDatasetQuery,page:
  const minimum=page.environment==='synthetic'?1:privacy.minimum_views;
  if(views.length<minimum)throw new Problem(422,'EULERNET_NO_OBSERVED_WINDOWS');
  const {site_id,page_key,data_source,revision,variant}=f;
- return {schema_version:1,model:'EulerNet',feature_schema_version:1,target:eulerTarget,horizon_ms:30000,environment:page.environment,scope:sequenceScope({site_id,page_key,data_source,revision,variant},{...page,intelligence_version:site.intelligence_version}),exported_at:new Date(now).toISOString(),expires_at:new Date(Math.min(...views.map(v=>Date.parse(v.started_at)))+privacy.raw_days*86400000).toISOString(),minimum_views:minimum,views,exclusions};
+ return {schema_version:1,model:'EulerNet',feature_schema_version:1,target:objective==='conversion'?conversionTarget:eulerTarget,horizon_ms:30000,...(objective==='conversion'?{primary_action_id:page.primary_action_id}:{}),environment:page.environment,scope:sequenceScope({site_id,page_key,data_source,revision,variant},{...page,intelligence_version:site.intelligence_version}),exported_at:new Date(now).toISOString(),expires_at:new Date(Math.min(...views.map(v=>Date.parse(v.started_at)))+privacy.raw_days*86400000).toISOString(),minimum_views:minimum,views,exclusions};
 }
 
-export async function eulerStatus(db:DB,f:IntelligenceScope,page:any):Promise<{status:'not_trained'|'expired'|'incompatible'}|{status:'ready';manifest:EulerManifest}> {
+export async function eulerStatus(db:DB,f:IntelligenceScope,page:any,directory?:string,objective:'euler'|'conversion'='euler'):Promise<{status:'not_trained'|'expired'|'incompatible'}|{status:'ready';manifest:EulerManifest}> {
+ directory??=await activeModelDirectory(eulerDirectory(f,objective));
  let manifest:EulerManifest;
- try{manifest=JSON.parse(await readFile(path.join(eulerDirectory(f),'manifest.json'),'utf8'));}
+ try{manifest=JSON.parse(await readFile(path.join(directory,'manifest.json'),'utf8'));}
  catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return {status:'not_trained'};throw new Problem(503,'INTELLIGENCE_ARTIFACT_INVALID');}
  const [site]=await db.query('SELECT intelligence_version FROM sites WHERE id=$1',[f.site_id]);
  const scope=sequenceScope(f,{...page,intelligence_version:site?.intelligence_version});
  const ev=manifest?.evaluation;
  const metricInvalid=(m:EulerManifest['evaluation']['eulernet'])=>!m||[m.log_loss,m.brier,m.ece].some(n=>!Number.isFinite(n)||n<0)||m.brier>1||m.ece>1||(m.auc!==null&&(!Number.isFinite(m.auc)||m.auc<0||m.auc>1));
- if(!manifest||manifest.schema_version!==1||manifest.model!=='EulerNet'||manifest.environment!==page.environment||!manifest.model_id||manifest.feature_schema_version!==1||manifest.target!==eulerTarget||manifest.horizon_ms!==30000||
+ if(!manifest||manifest.schema_version!==1||manifest.model!=='EulerNet'||manifest.environment!==page.environment||!manifest.model_id||manifest.feature_schema_version!==1||manifest.target!==(objective==='conversion'?conversionTarget:eulerTarget)||manifest.horizon_ms!==30000||
+  (objective==='conversion'&&(!page.primary_action_id||manifest.primary_action_id!==page.primary_action_id||!page.actions.includes(manifest.primary_action_id)))||
   !manifest.scope||Object.entries(scope).some(([k,v])=>manifest.scope[k as keyof typeof scope]!==v)||
   !manifest.vocabulary||eulerFeatureNames.some(name=>!Array.isArray(manifest.vocabulary[name])||!manifest.vocabulary[name].length||manifest.vocabulary[name].some(v=>typeof v!=='string'||v.length>150))||manifest.vocabulary.element_id.some(id=>!page.elements.includes(id))||
   !ev||!Number.isInteger(ev.test_views)||ev.test_views<1||!Number.isInteger(ev.test_examples)||ev.test_examples<ev.test_views||!Number.isInteger(ev.positives)||!Number.isInteger(ev.negatives)||ev.positives<1||ev.negatives<1||ev.positives+ev.negatives!==ev.test_examples||
@@ -90,7 +94,7 @@ export async function eulerStatus(db:DB,f:IntelligenceScope,page:any):Promise<{s
  if(!Number.isInteger(manifest.minimum_views)||manifest.minimum_views<minimum||ev.test_views<minimum||ev.positives<minimum||ev.negatives<minimum)return {status:'incompatible'};
  const expiry=Math.min(Date.parse(manifest.expires_at),Date.parse(manifest.oldest_started_at)+privacy.raw_days*86400000);
  if(!Number.isFinite(expiry)||Date.now()>=expiry)return {status:'expired'};
- try{await stat(path.join(eulerDirectory(f),'model.pt'));}catch{return {status:'not_trained'};}
+ try{await stat(path.join(directory,'model.pt'));}catch{return {status:'not_trained'};}
  return {status:'ready',manifest};
 }
 
@@ -98,9 +102,11 @@ export async function predictClick(input:EulerPrediction,manifest:EulerManifest)
  let features;
  try{features=eulerFeatures(input.history,input.device);}catch{throw new Problem(422,'INTELLIGENCE_FIRST_EXPOSURE_REQUIRED');}
  if(!manifest.vocabulary.element_id.includes(features.element_id))throw new Problem(422,'EULERNET_UNSUPPORTED_ELEMENT');
+ const objective=manifest.target===conversionTarget?'conversion':'euler';
+ if(objective==='conversion'&&input.history.includes('activation:'+manifest.primary_action_id))throw new Problem(422,'INTELLIGENCE_CONVERSION_ALREADY_OBSERVED');
  try{
-  const result=JSON.parse(await runIntelligence('eulernet.py',eulerDirectory(input),{features,model_id:manifest.model_id}));
+  const result=JSON.parse(await runIntelligence('eulernet.py',await activeModelDirectory(eulerDirectory(input,objective)),{features,model_id:manifest.model_id}));
   if(result?.model_id!==manifest.model_id||!Number.isFinite(result.probability)||result.probability<0||result.probability>1||result.element_id!==features.element_id||!Array.isArray(result.unseen_context)||result.unseen_context.some((name:any)=>!eulerFeatureNames.includes(name)))throw new Error('INVALID_RESULT');
-  return {model:'EulerNet',...result,target:eulerTarget,horizon_ms:30000,validation_state:manifest.validation_state,data_source:input.data_source};
+  return {model:'EulerNet',...result,target:manifest.target,primary_action_id:manifest.primary_action_id,horizon_ms:30000,validation_state:manifest.validation_state,data_source:input.data_source};
  }catch(e){if(e instanceof Problem)throw e;throw new Problem(503,'INTELLIGENCE_INFERENCE_UNAVAILABLE');}
 }

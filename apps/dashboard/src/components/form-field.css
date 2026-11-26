@@ -1,0 +1,186 @@
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.form-field > label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-primary, #242923);
+}
+.form-field-optional {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted, #74786f);
+}
+.form-field .form-field-control {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border, #dcded5);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text-primary, #242923);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.form-field .form-field-control:focus-visible {
+  outline: 2px solid var(--accent, #ce491c);
+  outline-offset: 2px;
+}
+.form-field .form-field-control::placeholder {
+  color: var(--text-muted, #74786f);
+  opacity: 1;
+}
+.form-field .form-field-control[aria-invalid='true'] {
+  border-color: #b73b29;
+}
+.form-field .form-field-control:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.form-field > small {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted, #74786f);
+}
+.form-field > small.form-field-error {
+  color: #b73b29;
+}
+
+.form-field > label {
+  flex: none;
+  min-width: 0;
+  width: auto;
+  min-height: 20px;
+}
+.form-field[data-label='hidden'] > label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.panel-header > .form-field,
+.ui-card-header > .form-field {
+  width: 260px;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+.form-field-control[type='range'] {
+  padding: 0;
+  border: 0;
+  min-height: 24px;
+  height: 24px;
+  background: transparent;
+  accent-color: var(--orange, #ff9369);
+}
+@media (max-width: 600px) {
+  .panel-header > .form-field,
+  .ui-card-header > .form-field {
+    width: 100%;
+    margin-top: 12px;
+  }
+}
+
+.reference-picker > .form-field {
+  flex: 1;
+  max-width: 520px;
+}
+.reference-picker > .form-field select {
+  margin: 0;
+  max-width: none;
+  font-size: 13px;
+  width: 100%;
+}
+.data-source-bar > .form-field {
+  width: 220px;
+  flex-shrink: 0;
+}
+.heatmap-subtoolbar .form-field {
+  display: grid;
+  grid-template-columns: auto 100px;
+  align-items: center;
+  gap: 12px;
+}
+.heatmap-subtoolbar .form-field > label {
+  font-size: 11px;
+}
+.table-pagination > .form-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.table-pagination > .form-field > .form-field-control {
+  width: 64px;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.table-pagination > .form-field > label {
+  font-size: 11px;
+}
+.table-search > .form-field {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 600px) {
+  .reference-picker > .form-field {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .data-source-bar > .form-field {
+    width: 100%;
+  }
+}
+.form-field[data-control='checkbox'],
+.form-field[data-control='radio'] {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 10px;
+}
+.form-field[data-control='checkbox'] > .form-field-control,
+.form-field[data-control='radio'] > .form-field-control {
+  width: 16px;
+  min-height: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  padding: 0;
+  margin-top: 2px;
+  accent-color: var(--orange, #d46137);
+}
+.form-field[data-control='checkbox'] > label,
+.form-field[data-control='radio'] > label {
+  font-weight: 400;
+  line-height: 1.6;
+}
+.form-field[data-control='hidden'] {
+  display: none;
+}
+.form-field[data-control='textarea'] > .form-field-control {
+  min-height: 100px;
+  resize: vertical;
+}
+.form-field[data-control='file'] > .form-field-control {
+  padding: 8px;
+  font-size: 12px;
+}

@@ -1,4 +1,15 @@
 .intelligence-layout{display:grid;gap:20px;min-width:0}
+.intelligence-panel progress{width:100%;height:12px;accent-color:var(--brand-orange,#d55b2c)}
+.intelligence-loss{height:260px;min-width:0;width:100%;margin:20px 0}
+.intelligence-panel details{margin:14px 0;min-width:0}
+.intelligence-panel summary{cursor:pointer;font-weight:600;margin-bottom:12px}
+.intelligence-journey{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}
+.intelligence-journey button{display:flex;gap:8px;align-items:center;overflow-wrap:anywhere;white-space:normal;text-align:left}
+.intelligence-branches{display:grid;gap:10px;max-width:760px}
+.intelligence-branch{display:grid;grid-template-columns:auto 1fr auto;gap:8px;padding:14px;text-align:left;border:1px solid var(--border,#ddd);border-radius:8px;background:var(--surface,#fff);color:inherit;cursor:pointer}
+.intelligence-branch code{overflow-wrap:anywhere;min-width:0}
+.intelligence-edge-bar{grid-column:2/4;height:5px;background:var(--brand-orange,#d55b2c);border-radius:4px}
+.intelligence-table-wrap{overflow-x:auto;max-width:100%}
 .intelligence-panel{padding:24px;min-width:0}
 .intelligence-panel h2{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
 .intelligence-panel p{line-height:1.6;margin:12px 0}

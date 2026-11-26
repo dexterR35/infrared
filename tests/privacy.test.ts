@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {readFile} from 'node:fs/promises';
 it('tracker has no storage, replay, or form-value capture APIs',async()=>{
- for(const file of ['tracker.ts','signals.ts','diagnostics.ts','bootstrap.ts']){const source=await readFile('apps/tracker/'+file,'utf8');
+ for(const file of ['tracker.ts','signals.ts','diagnostics.ts','bootstrap.ts','discovery.ts']){const source=await readFile('apps/tracker/'+file,'utf8');
   for(const banned of ['localStorage','sessionStorage','indexedDB','document.cookie','sendBeacon','innerHTML','textContent','innerText','selectionStart','getSelection'])expect(source,file+' uses '+banned).not.toContain(banned);
   // A form field's value may only be checked for emptiness, never read or sent.
   for(const use of source.match(/\.value[^,;)]*/g)??[])expect(use,file).toMatch(/^\.value\.length>0$/);}

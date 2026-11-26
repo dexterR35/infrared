@@ -13,11 +13,9 @@ This release extends the custom platform across selected Casino/Sport landing pa
 
 The report date boundary is explicitly UTC; displayed readout times use Europe/Bucharest. Registry timezones document local market context, but this release does not claim arbitrary local-calendar report boundaries or currency conversion. Market/device slices are exploratory; no single winner is inferred across all markets.
 
-## Local end-to-end lab
+## Local fixtures
 
-Create/start an experiment for Halloween or Christmas. Click **Open consented experiment lab** (native combined mode, `/experiment-lab/` on port 4173). Choose the experiment and start its consented preview. The host registers a random memory-only unit, receives a stable assignment for that tab, renders the actual variant, confirms it, then enables the ordinary SDK. The A/B candidate has different CTA copy/color; A/A keeps the same content.
-
-Click the embedded page to record actual local usability activity. **Complete demo registration/acquisition** calls the synthetic backend; it does not register a person or perform a financial transaction. Both the environment and UI identify this as a local fixture. **Privacy choices** withdraws SDK consent and removes the site's linked acquisition/heatmap evidence. No events are generated on a real page.
+The former browser experiment lab (`/experiment-lab/`) was never reachable from any entry point and has been removed. Register visits, rendered confirmations, outcomes and withdrawals through the authenticated backend acquisition API (`/v1/acquisition/*`) described above.
 
 The separate **Generate sample outcomes** action creates explicitly `seeded` examples with historical timestamps. It never adds to recorded outcomes, and its readout always says SAMPLE DATA. Repeating generation reuses sample units. Do not interpret generated effect sizes as observed uplift.
 

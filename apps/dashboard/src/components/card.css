@@ -1,0 +1,311 @@
+.ui-card {
+  margin: 0 0 17px;
+  min-width: 0;
+  border: 1px solid var(--border, var(--line, #e6e8e7));
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  color: var(--text-primary, #171717);
+  overflow: hidden;
+}
+.ui-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 15px;
+  border-bottom: 1px solid var(--border, var(--line, #e6e8e7));
+}
+.ui-card-header > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.ui-card-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-primary, #171717);
+}
+.ui-card-header p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text-muted, #595954);
+}
+.ui-card-body {
+  padding: 15px;
+  min-width: 0;
+}
+.ui-card-body[data-padding='none'] {
+  padding: 0;
+}
+.ui-card-body > .ui-collapsible {
+  margin: 14px -15px -15px;
+}
+.ui-card-footer:has(> .ui-collapsible) {
+  display: block;
+  padding: 0;
+}
+.ui-card-grid > .ui-card {
+  margin: 0;
+}
+.ui-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 15px;
+  border-top: 1px solid var(--border, var(--line, #e6e8e7));
+  font-size: 11px;
+  color: var(--text-muted, #595954);
+}
+.ui-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 11px;
+  margin-bottom: 17px;
+}
+.ui-card-grid[data-columns='2'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.ui-card-grid[data-columns='3'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.ui-card-grid[data-columns='4'] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.ui-card-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary, #373737);
+}
+.ui-card-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--surface-subtle, #f5f5ee);
+  color: var(--text-accent, #ab380f);
+}
+.ui-card-value {
+  display: block;
+  margin: 20px 0 16px;
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, #171717);
+}
+.ui-card-detail {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-muted, #595954);
+}
+.ui-card-body > p:not(.ui-card-detail) {
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--text-secondary, #373737);
+}
+.ui-card-body > p:first-child {
+  margin-top: 0;
+}
+.ui-card-body > p:last-child {
+  margin-bottom: 0;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 17px;
+}
+.detail-grid section {
+  min-width: 0;
+  border-left: 2px solid var(--line, #e6e8e7);
+  padding-left: 16px;
+}
+.detail-grid h3 {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.detail-grid dl {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+.detail-grid dl > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  font-size: 11px;
+}
+.detail-grid dt {
+  color: var(--text-muted, #595954);
+}
+.detail-grid dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+  color: var(--text-primary, #171717);
+  font-variant-numeric: tabular-nums;
+}
+.ui-card-facts {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--border, var(--line, #e6e8e7));
+}
+.ui-card-facts > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  font-size: 11px;
+  line-height: 1.65;
+}
+.ui-card-facts dt {
+  color: var(--text-muted, #595954);
+}
+.ui-card-facts dd {
+  margin: 0;
+  color: var(--text-primary, #171717);
+  font-variant-numeric: tabular-nums;
+}
+.ui-card-meters {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.ui-card-meters > div,
+.ui-card-meters > li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-secondary, #373737);
+}
+.ui-card-meters b {
+  text-align: right;
+  font-weight: 500;
+}
+.ui-card-meters meter {
+  width: 100%;
+  height: 7px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--surface-raised, #e7ece8);
+}
+.ui-card-meters meter::-webkit-meter-bar {
+  height: 7px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--surface-raised, #e7ece8);
+}
+.ui-card-meters meter::-webkit-meter-optimum-value {
+  border-radius: 4px;
+  background: var(--orange, #e88960);
+}
+.ui-card-meters meter::-moz-meter-bar {
+  border-radius: 4px;
+  background: var(--orange, #e88960);
+}
+.ui-card-footer > .ui-button {
+  margin-left: auto;
+}
+.ui-card-footer > .ui-collapsible .ui-collapsible-content {
+  padding: 0 20px 16px;
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--text-muted, #595954);
+}
+@media (max-width: 1000px) {
+  .ui-card-grid[data-columns] {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .ui-card-header {
+    padding: 13px;
+    flex-wrap: wrap;
+  }
+  .ui-card-body {
+    padding: 13px;
+  }
+  .ui-card-value {
+    font-size: 30px;
+  }
+  .ui-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .ui-card-label {
+    font-size: 11px;
+    align-items: flex-start;
+  }
+  .ui-card-icon {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+  }
+}
+@media (max-width: 600px) {
+  .ui-card-body > .ui-collapsible {
+    margin-left: -13px;
+    margin-right: -13px;
+    margin-bottom: -13px;
+  }
+  .ui-card-body[data-padding='none'] {
+    padding: 0;
+  }
+}
+@media (max-width: 380px) {
+  .ui-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ui-card-body > h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.ui-card-body > h3 {
+  font-size: 13px;
+  margin: 18px 0 10px;
+}
+.ui-card-body > .form-field,
+.ui-card-body > form > .form-field {
+  margin: 12px 0;
+}
+.more-analysis-content .ui-card-grid {
+  grid-template-columns: 1fr;
+}
+.more-analysis-content {
+  padding: 15px;
+}
+.ui-card-body .panel-header {
+  padding: 14px 15px;
+}
+.ui-card-body .table-footer {
+  padding: 10px 15px;
+}
+
+.ui-card-header h2,
+.ui-card-header p {
+  overflow-wrap: anywhere;
+}

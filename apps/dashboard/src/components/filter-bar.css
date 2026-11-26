@@ -1,0 +1,78 @@
+.filter-bar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+  padding: 20px;
+  margin-bottom: 24px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, var(--line, #e6e8e7));
+  border-radius: 10px;
+  min-width: 0;
+}
+.filter-bar[data-columns='3'] {
+  grid-template-columns: repeat(3, minmax(0, 200px));
+}
+.filter-bar[data-columns='4'] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.filter-bar[data-columns='6'] {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.filter-fields {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 20px;
+  min-width: 0;
+}
+.filter-fields > .form-field {
+  flex: 1 1 160px;
+  max-width: 260px;
+}
+.filter-bar > .filter-fields {
+  display: contents;
+}
+.filter-bar .form-field {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  gap: 8px;
+  max-width: none;
+  min-width: 0;
+}
+.filter-bar > .ui-collapsible {
+  grid-column: 1/-1;
+  margin: 6px -20px -20px;
+}
+.filter-bar > .ui-collapsible > .ui-collapsible-content {
+  padding: 4px 20px 20px;
+}
+.filter-bar .filter-fields {
+  margin-bottom: 0;
+}
+@media (max-width: 1199px) {
+  .filter-bar,
+  .filter-bar[data-columns='6'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1200px) {
+  .filter-bar[data-columns='7'] {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+@media (max-width: 767px) {
+  .filter-bar,
+  .filter-bar[data-columns] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 12px;
+  }
+}
+@media (max-width: 420px) {
+  .filter-bar,
+  .filter-bar[data-columns] {
+    grid-template-columns: 1fr;
+  }
+}

@@ -24,6 +24,7 @@ from sasrec import split_sequences, timestamp
 
 FEATURES = ("element_id", "device", "previous_action", "recent_clicks", "recent_activations", "recent_length")
 TARGET = "qualified_exposure_click_30s"
+CONVERSION_TARGET = "qualified_exposure_primary_action_30s"
 
 
 class ComplexInteraction(nn.Module):
@@ -80,8 +81,8 @@ class Logistic(nn.Module):
         return sum(weight(ids[:, i]).squeeze(-1) for i, weight in enumerate(self.weights)) + self.bias
 
 
-def model_key(scope):
-    values = ["EulerNet"] + [scope[k] for k in ("site_id", "page_key", "data_source", "revision", "variant")]
+def model_key(scope, target=TARGET):
+    values = ["EulerNetConversion" if target == CONVERSION_TARGET else "EulerNet"] + [scope[k] for k in ("site_id", "page_key", "data_source", "revision", "variant")]
     return hashlib.sha256(json.dumps(values, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
 
 
@@ -134,12 +135,13 @@ def check_classes(labels, minimum, partition):
         raise ValueError(f"{partition} requires at least {minimum} positive and {minimum} negative fully observed examples")
 
 
-def optimize(model, train_x, train_y, val_x, val_y, epochs):
+def optimize(model, train_x, train_y, val_x, val_y, epochs, progress=None, phase="eulernet"):
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.005, weight_decay=1e-5)
     best, state = float("inf"), None
-    for _ in range(epochs):
+    for epoch in range(epochs):
         model.train()
         order = torch.randperm(len(train_y))
+        total_loss = 0.0
         for chunk in order.split(64):
             x = train_x[chunk].clone()
             # Reserve index zero for sparse/unseen context, never for an element.
@@ -151,9 +153,13 @@ def optimize(model, train_x, train_y, val_x, val_y, epochs):
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 5)
             optimizer.step()
+            total_loss += float(loss.detach()) * len(chunk)
         model.eval()
         with torch.inference_mode():
             score = F.binary_cross_entropy_with_logits(model(val_x), val_y).item()
+        if progress:
+            progress(dict(phase=phase, epoch=epoch + 1, epochs=epochs,
+                          loss=total_loss / len(train_y), validation_loss=score))
         if score < best:
             best, state = score, {k: v.detach().clone() for k, v in model.state_dict().items()}
     model.load_state_dict(state)
@@ -175,8 +181,10 @@ def fit_calibration(logits, labels):
 
 
 def validate_dataset(data):
-    if data.get("schema_version") != 1 or data.get("model") != "EulerNet" or data.get("feature_schema_version") != 1 or data.get("target") != TARGET or data.get("horizon_ms") != 30000:
+    if data.get("schema_version") != 1 or data.get("model") != "EulerNet" or data.get("feature_schema_version") != 1 or data.get("target") not in (TARGET, CONVERSION_TARGET) or data.get("horizon_ms") != 30000:
         raise ValueError("Unsupported EulerNet dataset contract")
+    if data["target"] == CONVERSION_TARGET and not data.get("primary_action_id"):
+        raise ValueError("A registered primary conversion action is required")
     if data.get("environment") not in ("synthetic", "real") or data["scope"]["data_source"] not in ("recorded", "seeded") or timestamp(data["expires_at"]) <= datetime.now(timezone.utc).timestamp():
         raise ValueError("Dataset is expired or has an unclassified source")
     if not isinstance(data["minimum_views"], int) or data["minimum_views"] < 1:
@@ -208,8 +216,13 @@ def train(args):
     for labels, name in ((y, "Training"), (vy, "Validation"), (ty, "Test")):
         check_classes(labels, minimum, name)
     settings = dict(sizes=[len(vocabulary[field]) for field in FEATURES], width=args.width, orders=8)
-    model = optimize(EulerNet(**settings), x, y, vx, vy, args.epochs)
-    logistic = optimize(Logistic(settings["sizes"]), x, y, vx, vy, args.epochs)
+    history = []
+    def progress(point):
+        history.append(point)
+        if getattr(args, "progress", False):
+            print(json.dumps(dict(event="progress", **point), allow_nan=False), flush=True)
+    model = optimize(EulerNet(**settings), x, y, vx, vy, args.epochs, progress)
+    logistic = optimize(Logistic(settings["sizes"]), x, y, vx, vy, args.epochs, progress, "logistic")
     with torch.inference_mode():
         validation_logits, logistic_validation = model(vx), logistic(vx)
     calibration = fit_calibration(validation_logits, vy)
@@ -227,11 +240,11 @@ def train(args):
     manifest = dict(schema_version=1, model="EulerNet", model_id=model_id, scope=data["scope"], environment=data["environment"],
                     created_at=datetime.now(timezone.utc).isoformat(), expires_at=data["expires_at"],
                     oldest_started_at=min(v["started_at"] for v in data["views"]), minimum_views=minimum,
-                    feature_schema_version=1, target=TARGET, horizon_ms=30000, vocabulary=vocabulary,
+                    feature_schema_version=1, target=data["target"], primary_action_id=data.get("primary_action_id"), horizon_ms=30000, vocabulary=vocabulary,
                     evaluation=evaluation, validation_state=state,
                     training=dict(views=len(training), validation_views=len(validation), seed=args.seed, epochs=args.epochs,
-                                  split="chronological whole-view 70/15/15 with overlap purge", calibration="validation-only monotone Platt scaling"))
-    directory = Path(args.data_dir) / "intelligence" / model_key(data["scope"])
+                                  split="chronological whole-view 70/15/15 with overlap purge", calibration="validation-only monotone Platt scaling", history=history))
+    directory = Path(args.output_dir) if getattr(args, "output_dir", None) else Path(args.data_dir) / "intelligence" / model_key(data["scope"], data["target"])
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     weights_tmp, manifest_tmp = directory / (model_id + ".pt.tmp"), directory / (model_id + ".json.tmp")
     with os.fdopen(os.open(weights_tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as output:
@@ -240,6 +253,8 @@ def train(args):
         output.write(json.dumps(manifest, allow_nan=False, indent=2))
     os.replace(weights_tmp, directory / "model.pt")
     os.replace(manifest_tmp, directory / "manifest.json")
+    if not getattr(args, "output_dir", None):
+        (directory / "active.json").unlink(missing_ok=True)
     print(json.dumps(dict(model_directory=str(directory), model_id=model_id, evaluation=evaluation, validation_state=state)))
 
 
@@ -274,6 +289,8 @@ def main():
     training.add_argument("--epochs", type=int, default=30)
     training.add_argument("--width", type=int, default=8)
     training.add_argument("--seed", type=int, default=2026)
+    training.add_argument("--output-dir")
+    training.add_argument("--progress", action="store_true")
     prediction = commands.add_parser("predict")
     prediction.add_argument("--model-dir", required=True)
     args = parser.parse_args()

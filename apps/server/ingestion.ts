@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { DB } from '../../packages/db/index.js';
-import type { Batch, Event } from '../../packages/contracts/events.js';
+import type { Batch } from '../../packages/contracts/events.js';
 import { digest,canonical,Problem } from './security.js';
 import {acquisitionContext} from './acquisition.js';
 import {allowedCanonical,pathKey,validRules} from '../../packages/domain/site-paths.js';
@@ -15,7 +15,9 @@ export async function ingest(db:DB,b:Batch,origin:string,source:'recorded'|'seed
   const [site]=await tx.query('SELECT * FROM sites WHERE site_key=$1 FOR UPDATE',[b.site_key]);
   if(!site||site.origin!==origin)throw new Problem(403,'ORIGIN_NOT_ALLOWED');
   const [settings]=await tx.query("SELECT value FROM settings WHERE key='privacy'");
-  if(settings.value.global_stop||!site.enabled||site.approval_state!=='approved'||(site.environment==='synthetic'&&config.releaseStatus==='PRODUCTION'))throw new Problem(403,'COLLECTION_DISABLED');
+  if(site.archived||settings.value.global_stop||!site.enabled||site.approval_state!=='approved'||(site.environment==='synthetic'&&config.releaseStatus==='PRODUCTION'))throw new Problem(403,'COLLECTION_DISABLED');
+  // Consent recorded under an older or different policy than the one the owner approved is not valid consent for this site.
+  if(site.environment!=='synthetic'&&b.consent.policy_version!==site.consent_policy_version)throw new Problem(403,'CONSENT_POLICY_MISMATCH');
   if(b.context.page_path!==undefined&&site.collection_mode!=='whole_site')throw new Problem(422,'UNREGISTERED_CONTEXT');
   if((b.context.session_id!==undefined||b.context.session_seq!==undefined)&&(!site.journeys_enabled||b.context.session_id===undefined||b.context.session_seq===undefined))throw new Problem(422,'JOURNEYS_DISABLED');
   let [page]=await tx.query('SELECT * FROM pages WHERE site_id=$1 AND page_key=$2',[site.id,b.context.page_key]);
@@ -42,6 +44,17 @@ export async function ingest(db:DB,b:Batch,origin:string,source:'recorded'|'seed
    if(visit.experiment_id){const[experiment]=await tx.query("SELECT id FROM experiments WHERE id=$1 AND status IN ('running','paused')",[visit.experiment_id]);variantAllowed=!!experiment;}
   }
   if(!variantAllowed||['revision','locale','state'].some(k=>b.context[k as keyof typeof b.context]!==page[k])||!(page.campaign_codes??['unknown']).includes(b.context.campaign))throw new Problem(422,'UNREGISTERED_CONTEXT');
+  if(b.context.auto_elements?.length){
+   if(!site.auto_discovery)throw new Problem(422,'DISCOVERY_DISABLED');
+   const discovered=[...new Set([...page.elements,...b.context.auto_elements])];
+   if(discovered.length>200)throw new Problem(422,'ELEMENT_LIMIT');
+   const actions=[...new Set([...page.actions,...b.context.auto_elements.filter(id=>/^auto\.(button|a)\./.test(id))])];
+   if(actions.length>100)throw new Problem(422,'ACTION_LIMIT');
+   if(discovered.length!==page.elements.length||actions.length!==page.actions.length){
+    await tx.query('UPDATE pages SET elements=$3,actions=$4 WHERE site_id=$1 AND page_key=$2',[site.id,page.page_key,JSON.stringify(discovered),JSON.stringify(actions)]);
+   }
+   page.elements=discovered;page.actions=actions;
+  }
   for(const e of b.events) {
    const at=start+e.elapsed_ms;if(at<now-86400000||at>now+300000)throw new Problem(422,'EVENT_TIME');
    if(e.viewport.document_height<e.viewport.height||e.viewport.document_width<e.viewport.width)throw new Problem(422,'GEOMETRY_INVALID');

@@ -1,7 +1,7 @@
 import {build} from 'esbuild';
 import {build as viteBuild} from 'vite';
 import {createHash} from 'node:crypto';
-import {mkdir,writeFile,readFile} from 'node:fs/promises';
+import {mkdir,writeFile} from 'node:fs/promises';
 import {gzipSync} from 'node:zlib';
 import {batchSchema} from '../packages/contracts/events.js';
 await mkdir('dist/sdk',{recursive:true});

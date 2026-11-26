@@ -21,7 +21,7 @@ beforeAll(async()=>{
 afterAll(async()=>{await app.close();await collector.app.close();await db.close();});
 const visit=async(path:string,key=pathKey(path))=>{
  const b=batch(),[site]=await db.query("SELECT config_version FROM sites WHERE id='example-real'");
- return collector.app.inject({method:'POST',url:'/v1/events',headers:{origin:realOrigin},payload:{...b,site_key:siteKey,config_version:site.config_version,context:{page_key:key,revision:'auto',locale:'auto',variant:'control',state:'public-default',campaign:'unknown',page_path:path}}});
+ return collector.app.inject({method:'POST',url:'/v1/events',headers:{origin:realOrigin},payload:{...b,site_key:siteKey,config_version:site.config_version,consent:{analytics:true,policy_version:'cmp-1'},context:{page_key:key,revision:'auto',locale:'auto',variant:'control',state:'public-default',campaign:'unknown',page_path:path}}});
 };
 
 it('creates a page for each canonical path on first visit, with site-wide elements',async()=>{

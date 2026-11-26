@@ -15,6 +15,7 @@ const matches=(pattern:string,segments:string[])=>{
  for(let i=0;i<p.length;i++){if(p[i]==='*')return true;if(i>=segments.length)return false;if(p[i]!==':id'&&p[i].toLowerCase()!==segments[i].toLowerCase())return false;}
  return p.length===segments.length;
 };
+const privateRoots=new Set(['/login','/logout','/signin','/sign-in','/cart','/basket']);
 
 // Returns the canonical page path, or null when the path must not be tracked.
 export function canonicalPath(pathname:string,rules:SiteRules):string|null{
@@ -24,7 +25,7 @@ export function canonicalPath(pathname:string,rules:SiteRules):string|null{
  const raw=pathname.split('/').filter(Boolean);
  if(raw.length>12||raw.some(s=>!SEGMENT.test(s)&&!idLike(s)))return null;
  const segments=raw.map(s=>idLike(s)?':id':s);
- if(!rules.include.some(p=>matches(p,segments))||rules.exclude.some(p=>matches(p,segments)))return null;
+ if(!rules.include.some(p=>matches(p,segments))||rules.exclude.some(p=>matches(p,segments)||(privateRoots.has(p.toLowerCase())&&matches(p+'/*',segments))))return null;
  const pattern=rules.patterns.find(p=>matches(p,segments));
  return pattern??('/'+segments.join('/'));
 }
@@ -37,7 +38,9 @@ export function allowedCanonical(path:string,rules:SiteRules):boolean{
 // A stable page key for a canonical path, within the 64-character code format.
 export function pathKey(path:string):string{
  const slug=path==='/'?'home':path.slice(1).replace(/\/\*$/,'.all').replace(/:id/g,'id').replace(/\//g,'.').replace(/[^a-zA-Z0-9_.-]/g,'-').toLowerCase();
- const base='p.'+slug;if(base.length<=64)return base;
+ // Preserve existing ordinary keys; disambiguate literal dots, case and reserved slugs.
+ const ambiguous=path!=='/'&&(slug==='home'||/[A-Z.]/.test(path)||path.split('/').some(s=>s==='id'||s==='all'));
+ const base='p.'+slug;if(base.length<=64&&!ambiguous)return base;
  let h=5381;for(const c of path)h=((h<<5)+h+c.charCodeAt(0))>>>0;
- return base.slice(0,55)+'.'+h.toString(36).padStart(7,'0').slice(0,8);
+ return base.slice(0,55)+'.'+h.toString(36).padStart(7,'0');
 }

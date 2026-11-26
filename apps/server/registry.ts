@@ -4,6 +4,7 @@ import type {RegistryRow} from '../../packages/contracts/acquisition.js';
 import {parseAddress,selectorsOverlap,type Selector,MARKETING_PARAMS} from '../../packages/domain/matcher.js';
 import {validateSelector} from '../../packages/security/validation.js';
 import {Problem,canonical} from './security.js';
+import {canonicalPath,pathKey} from '../../packages/domain/site-paths.js';
 type Access=(site:string,tx:DB)=>Promise<unknown>;
 export async function importRegistry(db:DB,rows:RegistryRow[],dryRun:boolean,owner:boolean,access:Access){
  return db.transaction(async tx=>{
@@ -18,21 +19,28 @@ export async function importRegistry(db:DB,rows:RegistryRow[],dryRun:boolean,own
    const metadata=canonical({brand:r.brand,currency:r.currency,report_timezone:r.report_timezone});if(siteMetadata.has(u.origin)&&siteMetadata.get(u.origin)!==metadata)throw new Problem(422,'SITE_METADATA_CONFLICT');siteMetadata.set(u.origin,metadata);
    const[site]=await tx.query('SELECT * FROM sites WHERE origin=$1 FOR UPDATE',[u.origin]);if(site)await access(site.id,tx);else if(!owner)throw new Problem(403,'OWNER_REQUIRED');
    if(!site&&u.protocol!=='https:')throw new Problem(422,'REAL_ORIGIN_REQUIRES_HTTPS');
+   const autoPath=site?.collection_mode==='whole_site'?canonicalPath(selector.path,site.site_rules):null;
+   if(site?.collection_mode==='whole_site'){
+    if(!autoPath||Object.keys(selector.query_equals).length||selector.other_query_policy!=='ignore')throw new Problem(422,'WHOLE_SITE_PUBLIC_PATH_REQUIRED');
+    if(r.page_key!==pathKey(autoPath)||r.locale!=='auto')throw new Problem(422,'WHOLE_SITE_CONTEXT_AUTOMATIC');
+    selector.path=autoPath;
+   }
    if(!siblings.has(u.origin))siblings.set(u.origin,site?await tx.query('SELECT page_key,selector FROM pages WHERE site_id=$1',[site.id]):[]);
    const same=siblings.get(u.origin)!.find(p=>p.page_key===r.page_key);
    if(same&&canonical(same.selector.query_equals)!==canonical(selector.query_equals)||same&&(same.selector.origin!==selector.origin||same.selector.path!==selector.path))throw new Problem(409,'PAGE_IDENTITY_CONFLICT');
    if(siblings.get(u.origin)!.some(p=>p.page_key!==r.page_key&&selectorsOverlap(p.selector,selector)))throw new Problem(409,'SELECTOR_OVERLAP');
    if(site&&(site.brand!==r.brand||site.currency!==r.currency||site.report_timezone!==r.report_timezone)&&(await tx.query("SELECT 1 FROM experiments WHERE site_id=$1 AND status IN ('running','paused') LIMIT 1",[site.id])).length)throw new Problem(409,'ACTIVE_EXPERIMENT_METADATA_LOCKED');
    if(site&&(await tx.query("SELECT 1 FROM experiments WHERE site_id=$1 AND page_key=$2 AND status IN ('running','paused') LIMIT 1",[site.id,r.page_key])).length)throw new Problem(409,'ACTIVE_EXPERIMENT_METADATA_LOCKED');
-   if(!same)siblings.get(u.origin)!.push({page_key:r.page_key,selector});plans.push({row:i+1,action:same?'update':'create',site_id:site?.id??null,page_key:r.page_key,origin:u.origin,selector,record:r});
+   if(!same)siblings.get(u.origin)!.push({page_key:r.page_key,selector});plans.push({row:i+1,action:same?'update':'create',site_id:site?.id??null,page_key:r.page_key,origin:u.origin,selector,autoPath,record:r});
   }catch(error){errors.push({row:i+1,code:error instanceof Problem?error.code:'IMPORT_ROW_INVALID'});}
-  if(dryRun||errors.length)return {dry_run:dryRun,applied:false,errors,plan:plans.map(({selector,record,...p})=>p)};
+  if(dryRun||errors.length)return {dry_run:dryRun,applied:false,errors,plan:plans.map(({selector,record,autoPath,...p})=>p)};
   const ids=new Map<string,string>();
-  for(const p of plans){const r=p.record as RegistryRow;let id=p.site_id??ids.get(p.origin);if(!id){id=randomUUID();await tx.query("INSERT INTO sites(id,site_key,name,origin,domain_group,market,family,environment,brand,currency,report_timezone) VALUES($1,$2,$3,$4,$3,$5,'go','real',$6,$7,$8)",[id,'site_'+randomUUID().replaceAll('-',''),new URL(p.origin).hostname,p.origin,r.market,r.brand,r.currency,r.report_timezone]);ids.set(p.origin,id);}
-   await tx.query('UPDATE sites SET brand=$2,currency=$3,report_timezone=$4,config_version=config_version+1 WHERE id=$1',[id,r.brand,r.currency,r.report_timezone]);
+  for(const p of plans){const r=p.record as RegistryRow;let id=p.site_id??ids.get(p.origin);if(!id){id=randomUUID();await tx.query("INSERT INTO sites(id,site_key,name,origin,domain_group,market,family,environment,brand,currency,report_timezone) VALUES($1,$2,$3,$4,$3,$5,'website','real',$6,$7,$8)",[id,'site_'+randomUUID().replaceAll('-',''),new URL(p.origin).hostname,p.origin,r.market,r.brand,r.currency,r.report_timezone]);ids.set(p.origin,id);}
+   await tx.query('UPDATE sites SET brand=$2,currency=$3,report_timezone=$4,market=COALESCE(market,$5),config_version=config_version+1 WHERE id=$1',[id,r.brand,r.currency,r.report_timezone,r.market]);
    await tx.query('INSERT INTO pages(site_id,page_key,name,selector,product,market,locale,page_family,acquisition_goal) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(site_id,page_key) DO UPDATE SET name=EXCLUDED.name,product=EXCLUDED.product,market=EXCLUDED.market,locale=EXCLUDED.locale,page_family=EXCLUDED.page_family,acquisition_goal=EXCLUDED.acquisition_goal',[id,r.page_key,r.name,JSON.stringify(p.selector),r.product,r.market,r.locale,r.page_family,r.acquisition_goal]);
+   if(p.autoPath)await tx.query("UPDATE pages SET path=$3,auto=true,revision='auto' WHERE site_id=$1 AND page_key=$2",[id,r.page_key,p.autoPath]);
    await tx.query('INSERT INTO config_history(site_id,version,sample_rate) SELECT id,config_version,sample_rate FROM sites WHERE id=$1 ON CONFLICT DO NOTHING',[id]);p.site_id=id;
   }
-  return {dry_run:false,applied:true,errors:[],plan:plans.map(({selector,record,...p})=>p)};
+  return {dry_run:false,applied:true,errors:[],plan:plans.map(({selector,record,autoPath,...p})=>p)};
  });
 }

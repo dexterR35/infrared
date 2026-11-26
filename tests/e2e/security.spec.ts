@@ -1,4 +1,4 @@
-import {demoOrigin,collectorOrigin,credentialsFile} from './environment.js';
+import {demoOrigin,credentialsFile} from './environment.js';
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 

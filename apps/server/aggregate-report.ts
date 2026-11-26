@@ -1,4 +1,5 @@
 import type { DB } from '../../packages/db/index.js';
+import {buildOutline,type OutlineClick} from './page-outline.js';
 import type { Event } from '../../packages/contracts/events.js';
 import { cohortSegments, deviceForWidth, type SegmentFact } from '../../packages/domain/metrics.js';
 import { Problem } from './security.js';
@@ -54,6 +55,7 @@ export async function report(db: DB, f: ReportFilter, access:{includePendingRefe
   if (rows.length > 100000) throw new Problem(422, 'REPORT_BUDGET_EXCEEDED');
   const points = new Map<string, {x: number; y: number; weight: number}>();
   let incompatible = 0, unsupported = 0, masked = 0, mapped = 0, clickCount = 0,unregistered=0;
+  const outlineClicks:OutlineClick[]=[];
   const mapCoordinate=(p:ObservationPoint,width:number,height:number)=>{const m=reference?.manifest;if(!m)return null;if(p.layer!=='document'||p.visual_scale!==1||(p.visual_offset_x??0)!==0||(p.visual_offset_y??0)!==0)return null;
    let x=p.x,y=p.y;
    if(elementMapping){const element=m.elements.find((el:any)=>el.id===p.element_id);if(!element||p.x_fraction===undefined||p.y_fraction===undefined)return null;x=element.rect.x+p.x_fraction*element.rect.width;y=element.rect.y+p.y_fraction*element.rect.height;}
@@ -65,7 +67,7 @@ export async function report(db: DB, f: ReportFilter, access:{includePendingRefe
     if (!ids.has(row.view_id) || row.payload.type !== 'click') continue;
     const e = row.payload;
     if ((f.device && f.device !== 'all' && deviceForWidth(e.viewport.width) !== f.device) || (!elementMapping&&f.width && e.viewport.width !== +f.width)) continue;
-    clickCount++;
+    clickCount++;outlineClicks.push(e as unknown as OutlineClick);
     const m = reference?.manifest;
     if (!m || (!elementMapping&&(e.viewport.width !== m.viewport.width || Math.abs(e.viewport.document_height - m.document.height) > 2))) {incompatible++; continue;}
     if (e.layer !== 'document' || e.viewport.visual_scale !== 1 || e.viewport.visual_offset_x !== 0 || e.viewport.visual_offset_y !== 0) {unsupported++; continue;}
@@ -93,13 +95,16 @@ export async function report(db: DB, f: ReportFilter, access:{includePendingRefe
   const dates: Record<string, {date: string; views: number; activations: number}> = {};
   const widthSet = new Set<number>();
   for(const v of contextViews)for(const s of Object.values(v.facts.segments) as SegmentFact[])widthSet.add(s.width);
+  // Views per screen width for the selected device, so the width selector can show how much data each size has.
+  const widthViews=new Map<number,number>();
+  for(const v of contextViews){const seen=new Set<number>();for(const seg of Object.values(v.facts.segments) as SegmentFact[]){if(f.device&&f.device!=='all'&&deviceForWidth(seg.width)!==f.device)continue;seen.add(seg.width);}for(const w of seen)widthViews.set(w,(widthViews.get(w)??0)+1);}
   const elements = (page.elements as string[]).map(id => ({id, click_count: 0, exposed_views: 0, activated_views: 0, exposed_activated_views: 0}));
   let activated = 0, reach = 0, visible = 0, exposed = 0, exposedActivated = 0;
   const scrollSegments: SegmentFact[] = [];
   for (const v of confirmed) {
     const selected = selectedSegments(v);
-    const a = selected.some(s => s.actions.includes(page.primary_action_id??'registration-start'));
-    const e = selected.some(s => s.exposures.includes(page.primary_cta_id??'hero-register'));
+    const a = selected.some(s => s.actions.includes(page.primary_action_id??''));
+    const e = selected.some(s => s.exposures.includes(page.primary_cta_id??''));
     activated += +a; exposed += +e; exposedActivated += +(a && e);
     reach += Math.max(0, ...selected.map(s => s.reach));
     visible += selected.reduce((n,s) => n+s.visible_ms,0);
@@ -118,14 +123,14 @@ export async function report(db: DB, f: ReportFilter, access:{includePendingRefe
     const depth = i*5, reached = scrollSegments.filter(s => s.reach >= depth).length;
     return {depth, reached, segments: scrollSegments.length, percent: scrollSegments.length ? 100*reached/scrollSegments.length : 0};
   });
-  const advanced=engagement(confirmed.map(v=>({facts:v.facts,segments:selectedSegments(v)})),page.primary_cta_id??'hero-register',page.primary_action_id??'registration-start');
+  const advanced=engagement(confirmed.map(v=>({facts:v.facts,segments:selectedSegments(v)})),page.primary_cta_id??'',page.primary_action_id??'');
   const qualityRows=confirmed.length?await db.query("SELECT e.view_id,count(*)::int AS events,count(*) FILTER(WHERE e.received_at>v.started_at+((e.payload->>'elapsed_ms')::double precision*interval '1 millisecond')+interval '60 seconds')::int AS delayed,max(GREATEST(0,EXTRACT(epoch FROM(e.received_at-v.started_at))*1000-(e.payload->>'elapsed_ms')::double precision)) AS max_delay_ms FROM events e JOIN views v ON v.site_id=e.site_id AND v.view_id=e.view_id WHERE e.site_id=$1 AND e.view_id=ANY($2::text[]) GROUP BY e.view_id",[f.site_id,confirmed.map(v=>v.view_id)]):[];
   const processed=confirmed.map(v=>v.processed_at).filter(Boolean).map(t=>new Date(t).getTime());
   const freshness={processed_through:processed.length?new Date(Math.max(...processed)).toISOString():null};
   const diagnosticPoints=(kind:'rage_points'|'dead_points')=>{const bins=new Map<string,{x:number;y:number;weight:number}>();let observations=0;for(const v of confirmed)for(const s of selectedSegments(v))for(const p of s.diagnostics?.[kind]??[]){if(++observations>100000)throw new Problem(422,'REPORT_BUDGET_EXCEEDED');const point=mapCoordinate(p,s.width,s.document_height);if(!point)continue;const key=point.x+':'+point.y,existing=bins.get(key);if(existing)existing.weight++;else bins.set(key,point);}return [...bins.values()];};
   const revisions=await db.query("SELECT context->>'revision' AS revision FROM views WHERE site_id=$1 AND page_key=$2 AND data_source=$3 GROUP BY context->>'revision' ORDER BY min(started_at) LIMIT 100",[f.site_id,f.page_key,dataSource]);
   const qualityByView=new Map(qualityRows.map(r=>[r.view_id,r]));
-  const minimum=page.environment==='synthetic'?0:privacy.value.minimum_views,primaryAction=page.primary_action_id??'registration-start';
+  const minimum=page.environment==='synthetic'?0:privacy.value.minimum_views,primaryAction=page.primary_action_id??'';
   const behaviourViews:BehaviourView[]=confirmed.map(v=>{const segments=selectedSegments(v);return {view_id:v.view_id,country:v.country??null,context:v.context,behaviour:v.facts.behaviour,segments,activated:segments.some(s=>s.actions.includes(primaryAction))};});
   const sessionIds=[...new Set(confirmed.map(v=>v.context.session_id).filter((id:unknown):id is string=>typeof id==='string'))];
   const sessionViews=sessionIds.length?await db.query<{session_id:string;session_seq:number;page_key:string}>("SELECT page_key,context->>'session_id' AS session_id,(context->>'session_seq')::int AS session_seq FROM views WHERE site_id=$1 AND data_source=$2 AND context->>'session_id'=ANY($3::text[]) LIMIT 200001",[f.site_id,dataSource,sessionIds]):[];
@@ -135,9 +140,10 @@ export async function report(db: DB, f: ReportFilter, access:{includePendingRefe
   return {
     suppressed:false as const,page,reference,references,data_source:dataSource,selected_revision:revision,selected_variant:variant,variants:[...new Set([page.variant,...views.map(v=>v.context.variant)])],mapping:elementMapping?'element':'document',campaign:f.campaign??null,revisions:[...new Set([...revisions.map(r=>r.revision),page.revision])],...advanced,rage_points:diagnosticPoints('rage_points'),dead_points:diagnosticPoints('dead_points'),behaviour,segment_filters:{channel:f.channel??null,browser:f.browser??null,os:f.os??null,client_device:f.client_device??null,country:f.country??null},
     summary: {views: confirmed.length, clicks: clickCount, activated_views: activated, activation_rate: confirmed.length ? 100*activated/confirmed.length : 0, avg_reach: confirmed.length ? reach/confirmed.length : 0, avg_visible_seconds: confirmed.length ? visible/confirmed.length/1000 : 0, exposed_views: exposed, exposed_activated_views: exposedActivated, exposed_activation_rate: exposed ? 100*exposedActivated/exposed : 0},
-    points: [...points.values()], daily: Object.values(dates).sort((a,b) => a.date.localeCompare(b.date)), scroll, elements,
+    points: [...points.values()], outline: buildOutline(outlineClicks), daily: Object.values(dates).sort((a,b) => a.date.localeCompare(b.date)), scroll, elements,
     timeseries:activitySeries(chartViews,from.toISOString(),to.toISOString(),page.primary_cta_id,page.primary_action_id,chartMinimum),devices:segmentDevices(chartViews,chartMinimum),
     widths: [...widthSet].sort((a,b) => a-b),
+    width_views: [...widthViews].map(([width,views])=>({width,views})).sort((a,b)=>a.width-b.width),
     quality: {mapped, incompatible, unsupported, masked,unregistered,orphan_views: views.filter(v => v.has_page_view === false).length,pending_views:views.filter(v=>!v.facts||v.aggregation_version<3).length,advanced_views:confirmed.filter(v=>v.aggregation_version>=3).length,sample_rate:page.sample_rate,sample_rates:[...new Set(confirmed.map(v=>v.sample_rate))],aggregation_version:3,processed_through:freshness.processed_through,delayed_events:qualityRows.reduce((n,r)=>n+r.delayed,0),retained_events:qualityRows.reduce((n,r)=>n+r.events,0),p75_view_max_delay_ms:percentile(qualityRows.map(r=>Number(r.max_delay_ms)),0.75),provisional:true,delivery:'best-effort',private_exclusions:'not collected',total_observations:clickCount},
   };
 }

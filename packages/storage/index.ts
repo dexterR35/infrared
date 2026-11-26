@@ -13,7 +13,7 @@ export function filesystemReferences(dataDir:string):ReferenceStorage {
     return path.join(root,key);
   };
   return {
-    async write(key,bytes){const target=file(key);await mkdir(root,{recursive:true});await writeFile(target,bytes,{flag:'wx'});},
+    async write(key,bytes){const target=file(key);await mkdir(root,{recursive:true,mode:0o700});await writeFile(target,bytes,{flag:'wx',mode:0o600});},
     read:key=>readFile(file(key)),
     async remove(key){await unlink(file(key)).catch((e:NodeJS.ErrnoException)=>{if(e.code!=='ENOENT')throw e;});},
   };
